@@ -1,6 +1,6 @@
 #!/usr/bin/env fish
 
-function kubectl-events -d "view kubernetes events by timestamp" --wraps kubectl
+function kubectl-list-events -d "view kubernetes events by timestamp" --wraps kubectl
     begin
         echo -e "TIME\tNAMESPACE\tTYPE\tREASON\tOBJECT\tSOURCE\tMESSAGE"
         kubectl get events -o json $argv \
