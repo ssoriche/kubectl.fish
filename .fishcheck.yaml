@@ -1,0 +1,120 @@
+# fishcheck configuration for kubectl.fish
+# Based on standards from git.fish repository for consistency
+
+# General settings
+version: 2
+ignore_paths:
+  - .git/
+  - build/
+  - dist/
+
+# Style and formatting rules
+style:
+  # Indentation
+  indent_size: 4
+  indent_type: spaces
+
+  # Line length
+  max_line_length: 100
+
+  # Function naming
+  function_naming: kebab-case
+  variable_naming: snake_case
+
+  # Quotes
+  prefer_single_quotes: false
+
+  # Semicolons
+  require_semicolons: false
+
+# Best practices
+best_practices:
+  # Function documentation
+  require_function_description: true
+  require_help_option: true
+  require_usage_examples: true
+  require_exit_codes: true
+
+  # Variable scoping
+  prefer_local_variables: true
+  warn_global_variables: true
+
+  # Error handling
+  check_exit_codes: true
+  require_error_handling: true
+
+  # Dependencies
+  check_command_existence: true
+  require_dependency_documentation: true
+
+# Function-specific rules
+functions:
+  # All kubectl-* functions should follow these patterns
+  kubectl_functions:
+    pattern: "kubectl-*"
+    requirements:
+      - must_have_description
+      - must_have_wraps_annotation
+      - must_handle_help_option
+      - must_validate_prerequisites
+      - must_validate_arguments
+      - must_handle_errors_properly
+
+  # Main wrapper function
+  wrapper_functions:
+    pattern: "k"
+    requirements:
+      - must_have_description
+      - must_have_wraps_annotation
+      - must_handle_help_option
+      - must_validate_prerequisites
+
+# Testing requirements
+testing:
+  require_tests: true
+  test_patterns:
+    - "test_*"
+    - "*_test"
+
+  # Test coverage expectations
+  coverage:
+    functions: 100%
+    error_paths: 100%
+    help_functionality: 100%
+
+# Documentation requirements
+documentation:
+  require_readme: true
+  require_function_docs: true
+  require_examples: true
+  require_dependencies: true
+
+  # Header requirements for each function
+  required_sections:
+    - DESCRIPTION
+    - USAGE
+    - EXAMPLES
+    - DEPENDENCIES
+    - AUTHOR
+
+# Git integration rules (specific to kubectl.fish)
+kubectl_specific:
+  # Must be compatible with kubectl patterns
+  kubectl_compatibility: true
+
+  # Should delegate to kubectl for connection handling
+  delegate_connection_handling: true
+
+  # Must preserve kubectl exit codes
+  preserve_exit_codes: true
+
+  # Should support all kubectl flags
+  support_kubectl_flags: true
+
+# Error and warning levels
+levels:
+  style_violations: warning
+  best_practice_violations: error
+  missing_documentation: error
+  missing_tests: warning
+  compatibility_issues: error

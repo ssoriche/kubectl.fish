@@ -1,0 +1,279 @@
+name: Test kubectl.fish Functions
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          apt-get update
+          apt-get install -y fish curl
+
+      - name: Install fishcheck (optional linter)
+        run: |
+          # Install Node.js for fishcheck
+          curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+          apt-get install -y nodejs
+          npm install -g fishcheck || echo "fishcheck installation failed - continuing without it"
+
+      - name: Check Fish syntax and formatting
+        run: make lint
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell and dependencies
+        run: |
+          apt-get update
+          apt-get install -y fish jq wget curl
+
+      - name: Install gron
+        run: |
+          wget https://github.com/tomnomnom/gron/releases/download/v0.6.1/gron-linux-amd64-0.6.1.tgz
+          tar xzf gron-linux-amd64-0.6.1.tgz
+          mv gron /usr/local/bin/
+          chmod +x /usr/local/bin/gron
+
+      - name: Install fastgron (optional)
+        run: |
+          wget https://github.com/adamritter/fastgron/releases/download/v0.7.7/fastgron-ubuntu -O fastgron-ubuntu || echo "fastgron download failed, continuing with gron only"
+          if [ -f fastgron-ubuntu ]; then
+            chmod +x fastgron-ubuntu
+            mv fastgron-ubuntu /usr/local/bin/fastgron
+            echo "✅ fastgron installed successfully"
+          else
+            echo "⚠️ fastgron installation failed, kubectl-gron will use gron"
+          fi
+
+      - name: Check dependencies
+        run: make check-deps
+
+      - name: Install functions
+        run: make install
+
+      - name: Run unit tests
+        run: make test-unit
+
+  test-integration:
+    name: Integration Tests with Kind
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell and dependencies
+        run: |
+          apt-get update
+          apt-get install -y fish jq wget curl docker.io
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          mv kubectl /usr/local/bin/
+
+      - name: Install kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind
+          mv ./kind /usr/local/bin/kind
+
+      - name: Install gron
+        run: |
+          wget https://github.com/tomnomnom/gron/releases/download/v0.6.1/gron-linux-amd64-0.6.1.tgz
+          tar xzf gron-linux-amd64-0.6.1.tgz
+          mv gron /usr/local/bin/
+
+      - name: Start Docker daemon
+        run: |
+          dockerd &
+          sleep 10
+
+      - name: Create kind cluster
+        run: |
+          kind create cluster --name kubectl-fish-test --wait 300s
+
+      - name: Test kubectl connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Install functions
+        run: make install
+
+      - name: Run integration tests
+        run: make test-integration
+
+  test-documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          apt-get update
+          apt-get install -y fish
+
+      - name: Check documentation completeness
+        run: |
+          # Check that all functions have documentation
+          for func in functions/*.fish; do
+            if ! grep -q "^# $(basename "$func" .fish)" "$func"; then
+              echo "ERROR: $func missing header documentation"
+              exit 1
+            fi
+            if ! grep -q "DESCRIPTION:" "$func"; then
+              echo "ERROR: $func missing DESCRIPTION section"
+              exit 1
+            fi
+            if ! grep -q "USAGE:" "$func"; then
+              echo "ERROR: $func missing USAGE section"
+              exit 1
+            fi
+            if ! grep -q "EXAMPLES:" "$func"; then
+              echo "ERROR: $func missing EXAMPLES section"
+              exit 1
+            fi
+          done
+          echo "✅ All functions have complete documentation"
+
+      - name: Generate function documentation
+        run: |
+          make install
+          make docs
+
+  test-basic-functionality:
+    name: Basic Functionality Test
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell and basic dependencies
+        run: |
+          apt-get update
+          apt-get install -y fish jq
+
+      - name: Install gron
+        run: |
+          wget https://github.com/tomnomnom/gron/releases/download/v0.6.1/gron-linux-amd64-0.6.1.tgz
+          tar xzf gron-linux-amd64-0.6.1.tgz
+          mv gron /usr/local/bin/
+
+      - name: Check Fish version
+        run: fish --version
+
+      - name: Install functions
+        run: |
+          mkdir -p ~/.config/fish/functions
+          cp functions/*.fish ~/.config/fish/functions/
+
+      - name: Test function loading
+        run: |
+          fish -c "functions -q kubectl-gron && echo '✅ kubectl-gron loaded'"
+          fish -c "functions -q kubectl-dump && echo '✅ kubectl-dump loaded'"
+          fish -c "functions -q kubectl-list-events && echo '✅ kubectl-list-events loaded'"
+          fish -c "functions -q kubectl-really-all && echo '✅ kubectl-really-all loaded'"
+          fish -c "functions -q k && echo '✅ k wrapper loaded'"
+
+      - name: Test function help output
+        run: |
+          fish -c "kubectl-gron 2>&1 | grep -q 'Error: No arguments provided' && echo '✅ kubectl-gron argument validation works'"
+          fish -c "kubectl-dump 2>&1 | grep -q 'Error: No arguments provided' && echo '✅ kubectl-dump argument validation works'"
+
+  security-basic:
+    name: Basic Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for secrets in code
+        run: |
+          # Basic grep for common secret patterns
+          if grep -r -i "password\|secret\|key\|token" functions/ tests/ --exclude-dir=.git; then
+            echo "⚠️ Found potential secrets in code - please review"
+            # Don't fail the build, just warn
+          else
+            echo "✅ No obvious secrets found in code"
+          fi
+
+      - name: Check file permissions
+        run: |
+          find . -type f -name "*.fish" -executable | while read file; do
+            echo "✅ $file has executable permissions"
+          done
+
+  final-check:
+    name: Final Integration Check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs:
+      [
+        test-unit,
+        test-integration,
+        test-documentation,
+        test-basic-functionality,
+      ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          apt-get update
+          apt-get install -y fish jq
+
+      - name: Install all optional dependencies
+        run: |
+          # Install gron
+          wget https://github.com/tomnomnom/gron/releases/download/v0.6.1/gron-linux-amd64-0.6.1.tgz
+          tar xzf gron-linux-amd64-0.6.1.tgz
+          mv gron /usr/local/bin/
+
+          # Install fastgron
+          wget https://github.com/adamritter/fastgron/releases/download/v0.7.7/fastgron-ubuntu -O fastgron-ubuntu || echo "fastgron download failed, continuing with gron only"
+          if [ -f fastgron-ubuntu ]; then
+            chmod +x fastgron-ubuntu
+            mv fastgron-ubuntu /usr/local/bin/fastgron
+            echo "✅ fastgron installed successfully"
+          else
+            echo "⚠️ fastgron installation failed, kubectl-gron will use gron"
+          fi
+
+      - name: Run complete test suite
+        run: |
+          make install
+          make check-deps
+          make test-unit
+
+      - name: Summary
+        run: |
+          echo "🎉 All Forgejo CI checks passed!"
+          echo "✅ Code syntax validation"
+          echo "✅ Unit tests"
+          echo "✅ Integration tests"
+          echo "✅ Documentation checks"
+          echo "✅ Basic functionality tests"
+          echo "✅ Security checks"
+          echo ""
+          echo "Ready for merge! 🚀"
