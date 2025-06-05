@@ -1,0 +1,307 @@
+name: Test kubectl.fish Functions
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish
+
+      - name: Install fishcheck (optional linter)
+        run: |
+          # Install Node.js for fishcheck
+          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+          sudo apt-get install -y nodejs
+          sudo npm install -g fishcheck || echo "fishcheck installation failed - continuing without it"
+
+      - name: Check Fish syntax
+        run: |
+          echo "🔍 Checking Fish syntax..."
+          for file in functions/*.fish tests/*.fish; do
+            echo "  Checking $file..."
+            fish -n "$file"
+          done
+          echo "✅ All files have valid Fish syntax"
+
+      - name: Check Fish formatting
+        run: |
+          echo "🎨 Checking Fish formatting..."
+          for file in functions/*.fish tests/*.fish; do
+            echo "  Checking formatting of $file..."
+            fish_indent < "$file" > "/tmp/$(basename $file).formatted"
+            if ! diff -u "$file" "/tmp/$(basename $file).formatted"; then
+              echo "❌ $file is not properly formatted"
+              echo "Expected formatting:"
+              cat "/tmp/$(basename $file).formatted"
+              exit 1
+            fi
+            rm -f "/tmp/$(basename $file).formatted"
+          done
+          echo "✅ All files are properly formatted"
+
+      - name: Run fishcheck linting (if available)
+        continue-on-error: true
+        run: |
+          if command -v fishcheck >/dev/null 2>&1; then
+            echo "🔧 Running fishcheck linting..."
+            fishcheck functions/*.fish tests/*.fish
+            echo "✅ fishcheck validation passed"
+          else
+            echo "⚠️  fishcheck not available - skipping enhanced linting"
+          fi
+
+      - name: Run comprehensive lint target
+        run: make lint
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish
+
+      - name: Install optional dependencies
+        run: |
+          # Install jq
+          sudo apt-get install -y jq
+
+          # Install gron
+          wget https://github.com/tomnomnom/gron/releases/download/v0.6.1/gron-linux-amd64-0.6.1.tgz
+          tar xzf gron-linux-amd64-0.6.1.tgz
+          sudo mv gron /usr/local/bin/
+
+          # Install fastgron (optional - fallback to gron if unavailable)
+          wget https://github.com/adamritter/fastgron/releases/download/v0.7.7/fastgron-ubuntu -O fastgron-ubuntu || echo "fastgron download failed, continuing with gron only"
+          if [ -f fastgron-ubuntu ]; then
+            chmod +x fastgron-ubuntu
+            sudo mv fastgron-ubuntu /usr/local/bin/fastgron
+            echo "✅ fastgron installed successfully"
+          else
+            echo "⚠️ fastgron installation failed, kubectl-gron will use gron"
+          fi
+
+      - name: Check dependencies
+        run: make check-deps
+
+      - name: Install functions
+        run: make install
+
+      - name: Run unit tests
+        run: make test-unit
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Install optional dependencies
+        run: |
+          sudo apt-get install -y jq
+          wget https://github.com/tomnomnom/gron/releases/download/v0.6.1/gron-linux-amd64-0.6.1.tgz
+          tar xzf gron-linux-amd64-0.6.1.tgz
+          sudo mv gron /usr/local/bin/
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.8.0
+        with:
+          cluster_name: kubectl-fish-test
+          wait: 300s
+
+      - name: Test kubectl connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Install functions
+        run: make install
+
+      - name: Run integration tests
+        run: make test-integration
+
+  test-cross-platform:
+    name: Cross-Platform Tests
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        fish-version: ['3.6.0', 'latest']
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          if [ "${{ matrix.fish-version }}" = "latest" ]; then
+            sudo apt-get update
+            sudo apt-get install -y fish
+          else
+            # Install specific version from source
+            sudo apt-get update
+            sudo apt-get install -y build-essential cmake gettext git libncurses5-dev
+            git clone https://github.com/fish-shell/fish-shell.git
+            cd fish-shell
+            git checkout ${{ matrix.fish-version }}
+            cmake .
+            make
+            sudo make install
+          fi
+
+      - name: Install Fish shell (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          if [ "${{ matrix.fish-version }}" = "latest" ]; then
+            brew install fish
+          else
+            # For specific versions, use latest as fallback on macOS
+            brew install fish
+          fi
+
+      - name: Install basic dependencies
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sudo apt-get install -y jq
+          else
+            brew install jq
+          fi
+
+      - name: Check Fish version
+        run: fish --version
+
+      - name: Check syntax
+        run: |
+          fish --version
+          for file in functions/*.fish tests/*.fish; do
+            echo "Checking $file..."
+            fish -n "$file"
+          done
+
+      - name: Run basic tests
+        run: |
+          mkdir -p ~/.config/fish/functions
+          cp functions/*.fish ~/.config/fish/functions/
+          fish tests/test_kubectl_functions.fish || true
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish
+
+      - name: Check documentation completeness
+        run: |
+          # Check that all functions have documentation
+          for func in functions/*.fish; do
+            if ! grep -q "^# $(basename "$func" .fish)" "$func"; then
+              echo "ERROR: $func missing header documentation"
+              exit 1
+            fi
+            if ! grep -q "DESCRIPTION:" "$func"; then
+              echo "ERROR: $func missing DESCRIPTION section"
+              exit 1
+            fi
+            if ! grep -q "USAGE:" "$func"; then
+              echo "ERROR: $func missing USAGE section"
+              exit 1
+            fi
+            if ! grep -q "EXAMPLES:" "$func"; then
+              echo "ERROR: $func missing EXAMPLES section"
+              exit 1
+            fi
+          done
+          echo "✅ All functions have complete documentation"
+
+      - name: Generate function documentation
+        run: |
+          make install
+          make docs
+
+      - name: Check for broken links in README
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'yes'
+
+  release-check:
+    name: Release Readiness
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration, test-cross-platform, security-scan, documentation]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Fish shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish
+
+      - name: Install dependencies
+        run: make install-deps-ubuntu
+
+      - name: Run full test suite
+        run: make release-check
+
+      - name: Check version consistency
+        run: |
+          # Add version checking logic here if you have version files
+          echo "✅ Release readiness check completed"

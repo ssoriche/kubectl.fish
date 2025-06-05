@@ -1,0 +1,23 @@
+name: Generate CI Badges
+
+on:
+  push:
+    branches: [ main ]
+  workflow_run:
+    workflows: ["Test kubectl.fish Functions"]
+    types:
+      - completed
+
+jobs:
+  badge:
+    name: Update CI Badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Generate badge
+        run: |
+          echo "CI badge generation completed"
+          # Badge URLs are generated automatically by GitHub Actions
+          # https://github.com/ssoriche/kubectl.fish/actions/workflows/test.yaml/badge.svg
