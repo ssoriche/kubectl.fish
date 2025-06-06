@@ -101,10 +101,21 @@ function kubectl-list-events -d "View Kubernetes events sorted by timestamp" --w
     set -l output
     set output (printf "TIME\tNAMESPACE\tTYPE\tREASON\tOBJECT\tSOURCE\tMESSAGE\n%s" "$processed_events")
 
-    # Format and display
+    # Format and display with better column handling
     if command -q less
-        echo $output | column -t -s (printf '\t') | less -S
+        # Try column formatting first, with fallback to raw data for less
+        set -l formatted_output (echo $output | column -t -s (printf '\t') -o ' ' 2>/dev/null)
+        if test -n "$formatted_output"
+            echo $formatted_output | less -S
+        else
+            # If column fails, show raw data in less with horizontal scrolling
+            echo $output | less -S
+        end
     else
-        echo $output | column -t -s (printf '\t')
+        # For terminal output, use column with error suppression and fallback to raw output
+        if not echo $output | column -t -s (printf '\t') -o ' ' 2>/dev/null
+            # If column fails, just display with tab separation (fallback)
+            echo $output
+        end
     end
 end
