@@ -32,18 +32,21 @@ function kubectl-list-events -d "View Kubernetes events sorted by timestamp" --w
         echo ""
         echo "USAGE:"
         echo "  kubectl-list-events [kubectl-get-events-options...]"
+        echo "  kubectl-list-events --watch [kubectl-get-events-options...]"
+        echo ""
+        echo "OPTIONS:"
+        echo "  --watch     Watch for new events in real-time (no column formatting)"
         echo ""
         echo "EXAMPLES:"
         echo "  kubectl-list-events"
         echo "  kubectl-list-events -n kube-system"
         echo "  kubectl-list-events --all-namespaces"
-        echo "  kubectl-list-events --field-selector type=Warning"
+        echo "  kubectl-list-events --watch --field-selector type=Warning"
         echo ""
         echo "DEPENDENCIES:"
         echo "  - kubectl: Kubernetes command-line tool"
         echo "  - jq: JSON processor"
-        echo "  - column: Text columnization utility"
-        echo "  - less: Pager (optional)"
+        echo "  - column: Text columnization utility (for formatted output)"
         return 0
     end
 
@@ -62,15 +65,49 @@ function kubectl-list-events -d "View Kubernetes events sorted by timestamp" --w
         return 1
     end
 
+    # Check for watch mode
+    set -l watch_mode false
+    set -l kubectl_args
+    for arg in $argv
+        if test "$arg" = --watch
+            set watch_mode true
+        else
+            set kubectl_args $kubectl_args $arg
+        end
+    end
+
+    # Handle watch mode - real-time streaming
+    if test "$watch_mode" = true
+        echo "TIME\tNAMESPACE\tTYPE\tREASON\tOBJECT\tSOURCE\tMESSAGE"
+        kubectl get events --watch $kubectl_args -o json | while read -l line
+            if test -n "$line"
+                echo $line | jq -r '
+                    [
+                        (.eventTime//.lastTimestamp//(.firstTimestamp//"unknown")),
+                        (.object.metadata.namespace//"default"),
+                        .object.type,
+                        .object.reason,
+                        (.object.involvedObject.kind + "/" + .object.involvedObject.name),
+                        ((.object.source.component//"-") + "," + (.object.source.host//"-")),
+                        .object.message
+                    ] |
+                    @tsv' 2>/dev/null
+            end
+        end
+        return 0
+    end
+
+    # Only require column for formatted output
     if not command -q column
         echo "Error: column utility is not available" >&2
         echo "This is usually part of util-linux package" >&2
+        echo "Use --watch flag for unformatted real-time output" >&2
         return 1
     end
 
     # Get events with error handling - let kubectl handle connection errors
     set -l events_json
-    if not set events_json (kubectl get events -o json $argv 2>&1)
+    if not set events_json (kubectl get events -o json $kubectl_args 2>&1)
         echo "Error: Failed to get events from kubectl" >&2
         echo $events_json >&2
         return 1
@@ -97,25 +134,13 @@ function kubectl-list-events -d "View Kubernetes events sorted by timestamp" --w
         return 1
     end
 
-    # Create output with header and data
-    set -l output
-    set output (printf "TIME\tNAMESPACE\tTYPE\tREASON\tOBJECT\tSOURCE\tMESSAGE\n%s" "$processed_events")
-
-    # Format and display with better column handling
-    if command -q less
-        # Try column formatting first, with fallback to raw data for less
-        set -l formatted_output (echo $output | column -t -s (printf '\t') -o ' ' 2>/dev/null)
-        if test -n "$formatted_output"
-            echo $formatted_output | less -S
-        else
-            # If column fails, show raw data in less with horizontal scrolling
-            echo $output | less -S
-        end
-    else
-        # For terminal output, use column with error suppression and fallback to raw output
-        if not echo $output | column -t -s (printf '\t') -o ' ' 2>/dev/null
-            # If column fails, just display with tab separation (fallback)
-            echo $output
-        end
+    # Handle empty results
+    if test -z "$processed_events"
+        echo "No events found"
+        return 0
     end
+
+    # Formatted mode: use column for alignment (buffered)
+    printf "TIME\tNAMESPACE\tTYPE\tREASON\tOBJECT\tSOURCE\tMESSAGE\n"
+    printf "%s\n" $processed_events | column -t -s (printf '\t') -o ' ' 2>/dev/null
 end
