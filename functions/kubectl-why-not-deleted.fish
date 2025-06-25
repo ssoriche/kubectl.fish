@@ -1,3 +1,30 @@
+#!/usr/bin/env fish
+
+# kubectl-why-not-deleted - Analyze why a Kubernetes resource is not being deleted
+#
+# DESCRIPTION:
+#     This function analyzes why a Kubernetes resource is not being deleted by checking
+#     for finalizers, owner references, dependent resources, and providing actionable
+#     insights. It helps debug stuck deletions by examining the resource's metadata
+#     and relationships with other resources.
+#
+# USAGE:
+#     kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]
+#     kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME
+#
+# EXAMPLES:
+#     kubectl-why-not-deleted pod my-pod
+#     kubectl-why-not-deleted deployment my-app -n production
+#     kubectl-why-not-deleted pvc my-volume-claim
+#     kubectl-why-not-deleted namespace my-namespace
+#
+# DEPENDENCIES:
+#     - kubectl: Kubernetes command-line tool
+#     - jq: JSON processor for parsing resource metadata
+#
+# AUTHOR:
+#     kubectl.fish collection
+
 function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not being deleted" --wraps 'kubectl get'
     # Handle help option first
     if contains -- --help $argv; or contains -- -h $argv
@@ -5,6 +32,7 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
         echo ""
         echo "USAGE:"
         echo "  kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]"
+        echo "  kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME"
         echo ""
         echo "DESCRIPTION:"
         echo "  This function analyzes why a Kubernetes resource is not being deleted by checking"
@@ -31,14 +59,6 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
         return 0
     end
 
-    # Check if we have the required arguments
-    if test (count $argv) -lt 2
-        echo "Error: Insufficient arguments provided" >&2
-        echo "Usage: kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]" >&2
-        echo "Use 'kubectl-why-not-deleted --help' for more information" >&2
-        return 1
-    end
-
     # Check if kubectl is available
     if not command -q kubectl
         echo "Error: kubectl is not installed or not in PATH" >&2
@@ -53,12 +73,12 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
         return 1
     end
 
-    set -l resource_type $argv[1]
-    set -l resource_name $argv[2]
+    # Parse arguments to extract namespace and resource info
     set -l namespace_args
+    set -l resource_args
 
-    # Parse namespace argument if provided
-    set -l i 3
+    # Parse all arguments to separate namespace from resource arguments
+    set -l i 1
     while test $i -le (count $argv)
         switch $argv[$i]
             case -n --namespace
@@ -70,9 +90,22 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
                     return 1
                 end
             case "*"
+                set resource_args $resource_args $argv[$i]
                 set i (math $i + 1)
         end
     end
+
+    # Check if we have the required resource arguments
+    if test (count $resource_args) -lt 2
+        echo "Error: Insufficient arguments provided" >&2
+        echo "Usage: kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]" >&2
+        echo "       kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME" >&2
+        echo "Use 'kubectl-why-not-deleted --help' for more information" >&2
+        return 1
+    end
+
+    set -l resource_type $resource_args[1]
+    set -l resource_name $resource_args[2]
 
     echo "🔍 Analyzing why $resource_type/$resource_name is not being deleted..."
     echo ""
