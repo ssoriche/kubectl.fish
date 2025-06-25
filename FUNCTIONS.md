@@ -15,7 +15,7 @@ function k -d "Smart kubectl wrapper with plugin support" --wraps kubectl
 **Description:**
 This function provides a smart wrapper around kubectl that automatically
 detects and uses kubecolor for colorized output when available. It also
-provides access to kubectl-* functions in this collection by using the
+provides access to kubectl-\* functions in this collection by using the
 first argument as a potential function name.
 
 USAGE:
@@ -120,3 +120,28 @@ kubectl-really-all [kubectl-get-options...]
 EXAMPLES:
 kubectl-really-all
 
+## kubectl-why-not-deleted
+
+**File:** `functions/kubectl-why-not-deleted.fish`
+
+```fish
+# Function: kubectl-why-not-deleted
+# Location: functions/kubectl-why-not-deleted.fish
+
+function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not being deleted" --wraps 'kubectl get'
+
+```
+
+**Description:**
+This function analyzes why a Kubernetes resource is not being deleted by checking
+for finalizers, owner references, dependent resources, and providing actionable
+insights. It helps debug stuck deletions by examining the resource's metadata
+and relationships with other resources.
+
+USAGE:
+kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]
+
+EXAMPLES:
+kubectl-why-not-deleted pod my-pod
+kubectl-why-not-deleted deployment my-app -n production
+kubectl-why-not-deleted pv my-volume

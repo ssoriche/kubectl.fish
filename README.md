@@ -13,6 +13,7 @@ A collection of kubectl plugins and functions written in fish shell, designed to
 - **Resource dumping** with `kubectl-gron` (flatten JSON) and `kubectl-dump` (YAML output)
 - **Enhanced event viewing** with `kubectl-list-events` (sorted by timestamp)
 - **Comprehensive resource listing** with `kubectl-really-all` (all namespaced resources)
+- **Deletion analysis** with `kubectl-why-not-deleted` (debug stuck deletions)
 - **Robust error handling** and prerequisite checking
 - **Comprehensive test suite** for reliability
 - **Fish shell best practices** with proper documentation
@@ -186,6 +187,37 @@ kubectl-dump pods
 kubectl-dump deployment my-app
 kubectl-dump pods -n kube-system
 kubectl-dump service my-service
+```
+
+### `kubectl-why-not-deleted` - Deletion analysis
+
+Analyze why a Kubernetes resource is not being deleted by examining finalizers, owner references, and dependencies.
+
+**Dependencies:** `jq`
+
+**Installation:**
+
+```bash
+# macOS
+brew install jq
+
+# Ubuntu/Debian
+sudo apt-get install jq
+```
+
+**Usage:**
+
+```bash
+kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]
+```
+
+**Examples:**
+
+```bash
+kubectl-why-not-deleted pod my-stuck-pod
+kubectl-why-not-deleted deployment my-app -n production
+kubectl-why-not-deleted pvc my-volume-claim
+kubectl-why-not-deleted namespace my-namespace
 ```
 
 ## 🧪 Testing
