@@ -209,13 +209,17 @@ sudo apt-get install jq
 
 ```bash
 kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]
+kubectl-why-not-deleted RESOURCE/NAME [-n NAMESPACE]
+kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME
 ```
 
 **Examples:**
 
 ```bash
 kubectl-why-not-deleted pod my-stuck-pod
+kubectl-why-not-deleted pod/my-stuck-pod
 kubectl-why-not-deleted deployment my-app -n production
+kubectl-why-not-deleted Pod/my-pod-name -n production
 kubectl-why-not-deleted pvc my-volume-claim
 kubectl-why-not-deleted namespace my-namespace
 ```

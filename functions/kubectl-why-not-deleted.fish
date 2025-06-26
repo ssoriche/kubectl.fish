@@ -10,11 +10,14 @@
 #
 # USAGE:
 #     kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]
+#     kubectl-why-not-deleted RESOURCE/NAME [-n NAMESPACE]
 #     kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME
 #
 # EXAMPLES:
 #     kubectl-why-not-deleted pod my-pod
+#     kubectl-why-not-deleted pod/my-pod
 #     kubectl-why-not-deleted deployment my-app -n production
+#     kubectl-why-not-deleted Pod/my-pod-name -n production
 #     kubectl-why-not-deleted pvc my-volume-claim
 #     kubectl-why-not-deleted namespace my-namespace
 #
@@ -32,6 +35,7 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
         echo ""
         echo "USAGE:"
         echo "  kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]"
+        echo "  kubectl-why-not-deleted RESOURCE/NAME [-n NAMESPACE]"
         echo "  kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME"
         echo ""
         echo "DESCRIPTION:"
@@ -42,7 +46,9 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
         echo ""
         echo "EXAMPLES:"
         echo "  kubectl-why-not-deleted pod my-pod"
+        echo "  kubectl-why-not-deleted pod/my-pod"
         echo "  kubectl-why-not-deleted deployment my-app -n production"
+        echo "  kubectl-why-not-deleted Pod/my-pod-name -n production"
         echo "  kubectl-why-not-deleted pvc my-volume-claim"
         echo "  kubectl-why-not-deleted namespace my-namespace"
         echo ""
@@ -95,17 +101,44 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
         end
     end
 
-    # Check if we have the required resource arguments
-    if test (count $resource_args) -lt 2
+    # Parse resource arguments - support both "RESOURCE NAME" and "RESOURCE/NAME" formats
+    set -l resource_type
+    set -l resource_name
+
+    if test (count $resource_args) -eq 1
+        # Check if single argument is in RESOURCE/NAME format
+        if string match -q "*/*" $resource_args[1]
+            set -l parts (string split "/" $resource_args[1])
+            if test (count $parts) -eq 2 -a -n "$parts[1]" -a -n "$parts[2]"
+                set resource_type $parts[1]
+                set resource_name $parts[2]
+            else
+                echo "Error: Invalid resource format '$resource_args[1]'" >&2
+                echo "Expected format: RESOURCE/NAME (e.g., pod/my-pod)" >&2
+                echo "Both resource type and name must be non-empty" >&2
+                echo "Use 'kubectl-why-not-deleted --help' for more information" >&2
+                return 1
+            end
+        else
+            echo "Error: Insufficient arguments provided" >&2
+            echo "Usage: kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]" >&2
+            echo "       kubectl-why-not-deleted RESOURCE/NAME [-n NAMESPACE]" >&2
+            echo "       kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME" >&2
+            echo "Use 'kubectl-why-not-deleted --help' for more information" >&2
+            return 1
+        end
+    else if test (count $resource_args) -ge 2
+        # Traditional RESOURCE NAME format
+        set resource_type $resource_args[1]
+        set resource_name $resource_args[2]
+    else
         echo "Error: Insufficient arguments provided" >&2
         echo "Usage: kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]" >&2
+        echo "       kubectl-why-not-deleted RESOURCE/NAME [-n NAMESPACE]" >&2
         echo "       kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME" >&2
         echo "Use 'kubectl-why-not-deleted --help' for more information" >&2
         return 1
     end
-
-    set -l resource_type $resource_args[1]
-    set -l resource_name $resource_args[2]
 
     echo "🔍 Analyzing why $resource_type/$resource_name is not being deleted..."
     echo ""
