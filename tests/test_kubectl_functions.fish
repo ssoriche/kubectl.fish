@@ -226,20 +226,20 @@ function test_argument_forwarding
     # Test kubectl-list-events argument forwarding by creating a mock kubectl function
     function test_kubectl_list_events_forwarding
         # Create a mock kubectl function that captures arguments
-        set -l temp_file (mktemp)
+        set -g temp_list_events_file (mktemp)
         function kubectl
-            echo "kubectl $argv" >$temp_file
+            echo "kubectl $argv" >$temp_list_events_file
             # Return empty JSON to avoid jq errors
             echo '{"items": []}'
         end
 
         # Test that namespace argument is forwarded
         kubectl-list-events --namespace test-namespace >/dev/null 2>&1
-        set -l captured_command (cat $temp_file)
+        set -l captured_command (cat $temp_list_events_file)
 
         # Clean up
         functions -e kubectl
-        rm -f $temp_file
+        rm -f $temp_list_events_file
 
         # Check if the namespace argument was forwarded
         echo $captured_command | grep -q "kubectl get events --namespace test-namespace -o json"
@@ -253,17 +253,17 @@ function test_argument_forwarding
 
     # Test kubectl-gron argument forwarding
     function test_kubectl_gron_forwarding
-        set -l temp_file (mktemp)
+        set -g temp_gron_file (mktemp)
         function kubectl
-            echo "kubectl $argv" >$temp_file
+            echo "kubectl $argv" >$temp_gron_file
             echo '{"items": []}'
         end
 
         kubectl-gron pods --namespace test-namespace >/dev/null 2>&1
-        set -l captured_command (cat $temp_file)
+        set -l captured_command (cat $temp_gron_file)
 
         functions -e kubectl
-        rm -f $temp_file
+        rm -f $temp_gron_file
 
         echo $captured_command | grep -q "kubectl get pods --namespace test-namespace -o json"
     end
@@ -276,17 +276,17 @@ function test_argument_forwarding
 
     # Test kubectl-dump argument forwarding
     function test_kubectl_dump_forwarding
-        set -l temp_file (mktemp)
+        set -g temp_dump_file (mktemp)
         function kubectl
-            echo "kubectl $argv" >$temp_file
+            echo "kubectl $argv" >$temp_dump_file
             echo '{"items": []}'
         end
 
         kubectl-dump pods --namespace test-namespace >/dev/null 2>&1
-        set -l captured_command (cat $temp_file)
+        set -l captured_command (cat $temp_dump_file)
 
         functions -e kubectl
-        rm -f $temp_file
+        rm -f $temp_dump_file
 
         echo $captured_command | grep -q "kubectl get pods --namespace test-namespace"
     end
