@@ -215,6 +215,88 @@ function test_consistency
     test_assert "k has proper wraps" "functions k | grep -q 'kubectl'" 0
 end
 
+function test_argument_forwarding
+    echo "=== Testing Argument Forwarding ==="
+
+    if not command -q kubectl
+        test_skip "Argument forwarding tests" "kubectl not available"
+        return
+    end
+
+    # Test kubectl-list-events argument forwarding by creating a mock kubectl function
+    function test_kubectl_list_events_forwarding
+        # Create a mock kubectl function that captures arguments
+        set -l temp_file (mktemp)
+        function kubectl
+            echo "kubectl $argv" >$temp_file
+            # Return empty JSON to avoid jq errors
+            echo '{"items": []}'
+        end
+
+        # Test that namespace argument is forwarded
+        kubectl-list-events --namespace test-namespace >/dev/null 2>&1
+        set -l captured_command (cat $temp_file)
+
+        # Clean up
+        functions -e kubectl
+        rm -f $temp_file
+
+        # Check if the namespace argument was forwarded
+        echo $captured_command | grep -q "kubectl get events --namespace test-namespace -o json"
+    end
+
+    if command -q jq
+        test_assert "kubectl-list-events forwards namespace argument" test_kubectl_list_events_forwarding 0
+    else
+        test_skip "kubectl-list-events argument forwarding" "jq not available"
+    end
+
+    # Test kubectl-gron argument forwarding
+    function test_kubectl_gron_forwarding
+        set -l temp_file (mktemp)
+        function kubectl
+            echo "kubectl $argv" >$temp_file
+            echo '{"items": []}'
+        end
+
+        kubectl-gron pods --namespace test-namespace >/dev/null 2>&1
+        set -l captured_command (cat $temp_file)
+
+        functions -e kubectl
+        rm -f $temp_file
+
+        echo $captured_command | grep -q "kubectl get pods --namespace test-namespace -o json"
+    end
+
+    if command -q gron; or command -q fastgron
+        test_assert "kubectl-gron forwards namespace argument" test_kubectl_gron_forwarding 0
+    else
+        test_skip "kubectl-gron argument forwarding" "gron/fastgron not available"
+    end
+
+    # Test kubectl-dump argument forwarding
+    function test_kubectl_dump_forwarding
+        set -l temp_file (mktemp)
+        function kubectl
+            echo "kubectl $argv" >$temp_file
+            echo '{"items": []}'
+        end
+
+        kubectl-dump pods --namespace test-namespace >/dev/null 2>&1
+        set -l captured_command (cat $temp_file)
+
+        functions -e kubectl
+        rm -f $temp_file
+
+        echo $captured_command | grep -q "kubectl get pods --namespace test-namespace"
+    end
+
+    test_assert "kubectl-dump forwards namespace argument" test_kubectl_dump_forwarding 0
+
+    # Clean up test functions
+    functions -e test_kubectl_list_events_forwarding test_kubectl_gron_forwarding test_kubectl_dump_forwarding
+end
+
 function test_integration_basic
     echo "=== Testing Basic Integration ==="
 
@@ -333,6 +415,7 @@ function run_all_tests
     test_prerequisite_checking
     test_argument_validation
     test_consistency
+    test_argument_forwarding
     test_function_registration
     test_integration_basic
     test_linting_standards
