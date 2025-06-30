@@ -67,7 +67,7 @@ function kubectl-list-events --description 'List Kubernetes events with proper f
     end
 
     # Get events in JSON format
-    set -l events_json (kubectl get events -o json 2>/dev/null)
+    set -l events_json (kubectl get events $argv -o json 2>/dev/null)
     if test $status -ne 0
         echo "Error: Failed to get events from Kubernetes" >&2
         return 1
