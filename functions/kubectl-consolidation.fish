@@ -289,49 +289,65 @@ function _kubectl_consolidation_show_nodes
     set -l tmp_events (mktemp)
 
     # Build field selectors for specific nodes if applicable
+    # OPTIMIZATION: Fetch pods and events in PARALLEL to reduce wall-clock time
     if test (count $node_names) -le 10
         # For small number of nodes, fetch pods per-node (much faster)
         # Collect all pod data first, then merge once (avoids N file operations)
-        for node in $node_names
-            kubectl get pods --all-namespaces --field-selector "spec.nodeName=$node" -o json 2>/dev/null
-        end | jq -s '{items: [.[].items[]]}' >$tmp_pods 2>/dev/null
-        if test $status -ne 0
-            echo "Warning: Failed to fetch pod data for some nodes" >&2
-            echo '{"items":[]}' >$tmp_pods
-        end
-    else
-        # For many nodes, fetch all pods once
-        if not kubectl get pods --all-namespaces -o json >$tmp_pods 2>&1
-            echo "Warning: Failed to fetch pod data" >&2
-            echo '{"items":[]}' >$tmp_pods
-        end
-    end
+        # Run in background using fish_exec_job
+        fish -c "
+            for node in $node_names
+                kubectl get pods --all-namespaces --field-selector \"spec.nodeName=\$node\" -o json 2>/dev/null
+            end | jq -s '{items: [.[].items[] | {spec: {nodeName: .spec.nodeName}, metadata: {namespace: .metadata.namespace, name: .metadata.name, annotations: .metadata.annotations}}]}' >$tmp_pods 2>/dev/null
+            if test \$status -ne 0
+                echo '{\"items\":[]}' >$tmp_pods
+            end
+        " &
+        set -l pods_job $last_pid
 
-    # Fetch events for specific nodes
-    if test (count $node_names) -le 10
-        # Collect all event data first, then merge once (avoids N file operations)
-        for node in $node_names
-            kubectl get events --all-namespaces --field-selector "involvedObject.kind=Node,involvedObject.name=$node" -o json 2>/dev/null
-        end | jq -s '{items: [.[].items[]]}' >$tmp_events 2>/dev/null
-        if test $status -ne 0
-            echo "Warning: Failed to fetch event data for some nodes" >&2
-            echo '{"items":[]}' >$tmp_events
-        end
+        # Fetch events in parallel
+        fish -c "
+            for node in $node_names
+                kubectl get events --all-namespaces --field-selector \"involvedObject.kind=Node,involvedObject.name=\$node\" -o json 2>/dev/null
+            end | jq -s '{items: [.[].items[] | {involvedObject: .involvedObject, reason: .reason, message: .message}]}' >$tmp_events 2>/dev/null
+            if test \$status -ne 0
+                echo '{\"items\":[]}' >$tmp_events
+            end
+        " &
+        set -l events_job $last_pid
+
+        # Wait for both jobs to complete
+        wait $pods_job $events_job 2>/dev/null
     else
-        # For many nodes, fetch all events once
-        if not kubectl get events --all-namespaces --field-selector involvedObject.kind=Node -o json >$tmp_events 2>&1
-            echo "Warning: Failed to fetch event data" >&2
-            echo '{"items":[]}' >$tmp_events
-        end
+        # For many nodes, fetch all pods and events in parallel
+        # Fetch pods in background with reduced fields
+        fish -c "
+            kubectl get pods --all-namespaces -o json 2>/dev/null | jq '{items: [.items[] | {spec: {nodeName: .spec.nodeName}, metadata: {namespace: .metadata.namespace, name: .metadata.name, annotations: .metadata.annotations}}]}' >$tmp_pods 2>&1
+            if test \$status -ne 0
+                echo '{\"items\":[]}' >$tmp_pods
+            end
+        " &
+        set -l pods_job $last_pid
+
+        # Fetch events in background with reduced fields
+        fish -c "
+            kubectl get events --all-namespaces --field-selector involvedObject.kind=Node -o json 2>/dev/null | jq '{items: [.items[] | {involvedObject: .involvedObject, reason: .reason, message: .message}]}' >$tmp_events 2>&1
+            if test \$status -ne 0
+                echo '{\"items\":[]}' >$tmp_events
+            end
+        " &
+        set -l events_job $last_pid
+
+        # Wait for both jobs to complete
+        wait $pods_job $events_job 2>/dev/null
     end
 
     # OPTIMIZATION: Process ALL nodes in a single jq pass
     # Build a TSV mapping: node_name<TAB>blockers
-    # COMPLEXITY: O(nodes × (pods + events)) - iterates through all pods/events once per node
-    # This is acceptable because:
-    # - Single jq process (avoids N process spawns)
-    # - All data loaded in memory (no repeated I/O)
-    # - jq's internal filters are highly optimized
+    # COMPLEXITY: O(pods + events + nodes) using pre-grouped lookup tables
+    # - Pre-group pods by nodeName: O(pods log pods)
+    # - Pre-group events by node name: O(events log events)
+    # - For each node, O(1) hash lookup: O(nodes)
+    # Total: O(pods log pods + events log events + nodes) - much better than O(nodes × (pods + events))
     set -l tmp_results (mktemp)
 
     # Create temp file with node list (as JSON array)
@@ -341,6 +357,7 @@ function _kubectl_consolidation_show_nodes
     # Single jq invocation to process all data at once
     # Input: Three JSON files loaded via --slurpfile (pods, events, nodes)
     # Output: TSV lines of "node_name<TAB>blocker1,blocker2" or "node_name<TAB><none>"
+    # OPTIMIZATION: Pre-group data by node name for O(pods + events + nodes) instead of O(nodes × (pods + events))
     jq -r --slurpfile pods $tmp_pods --slurpfile events $tmp_events --slurpfile nodes $tmp_nodes '
         # Define helper function to normalize event messages to short blocker codes
         # Used to convert verbose Karpenter event messages into standardized identifiers
@@ -357,14 +374,25 @@ function _kubectl_consolidation_show_nodes
             else empty
             end;
 
-        # Iterate over each node name from the input list
+        # Build lookup indices once (O(pods + events) preprocessing)
+        # Group pods by nodeName for fast lookup
+        ($pods[0].items | group_by(.spec.nodeName // "") | map({key: (.[0].spec.nodeName // ""), value: .}) | from_entries) as $pods_by_node |
+
+        # Group events by node name for fast lookup
+        ($events[0].items | map(select(.involvedObject.kind == "Node")) | group_by(.involvedObject.name // "") | map({key: (.[0].involvedObject.name // ""), value: .}) | from_entries) as $events_by_node |
+
+        # Iterate over each node name from the input list (O(nodes) processing)
         $nodes[0][] as $node |
+
+        # Build a set of pod names that currently exist on this node (for event validation)
+        # Format: "namespace/podname" to match event message format
+        (($pods_by_node[$node] // []) | map((.metadata.namespace // "") + "/" + (.metadata.name // "")) | unique) as $existing_pods |
 
         # Collect all consolidation blockers for this node from two sources:
         (
-            # Source 1: Pod annotations (Karpenter disruption prevention annotations)
-            # Scans all pods on this node for do-not-evict/disrupt/consolidate annotations
-            ([$pods[0].items[] | select(.spec.nodeName == $node) |
+            # Source 1: Pod annotations (O(1) lookup + O(pods_on_node) scan)
+            # Check pods on this node for do-not-evict/disrupt/consolidate annotations
+            ([($pods_by_node[$node] // [])[] |
                 if .metadata.annotations["karpenter.sh/do-not-evict"] == "true" then "do-not-evict"
                 elif .metadata.annotations["karpenter.sh/do-not-disrupt"] == "true" then "do-not-disrupt"
                 elif .metadata.annotations["karpenter.sh/do-not-consolidate"] == "true" then "do-not-consolidate"
@@ -372,9 +400,26 @@ function _kubectl_consolidation_show_nodes
                 end
             ] | unique) +
 
-            # Source 2: Node events (Karpenter CannotConsolidate events)
-            # Extracts and normalizes blocker reasons from cluster events
-            ([$events[0].items[] | select(.involvedObject.kind == "Node" and .involvedObject.name == $node and (.reason == "CannotConsolidate" or (.message | test("consolidation"; "i")))) | .message | normalize_blocker] | unique)
+            # Source 2: Node events (O(1) lookup + O(events_for_node) scan)
+            # Extract and normalize blocker reasons from Karpenter events
+            # IMPORTANT: Only include event-based blockers if the referenced pod still exists
+            ([($events_by_node[$node] // [])[] |
+                select(.reason == "CannotConsolidate" or .reason == "DeprovisioningBlocked" or .reason == "DisruptionBlocked" or (.message // "" | test("consolidat|deprovision|disrupt"; "i"))) |
+                .message // "" |
+                select(. != "") |
+                # Extract pod name from message format: Pod "namespace/podname"
+                # Only process if the pod still exists on this node
+                . as $msg |
+                if ($msg | test("Pod ")) then
+                    # Try to extract pod name (format: Pod "namespace/podname")
+                    ($msg | capture("Pod \"(?<pod>[^\"]+)\"") | .pod // "") as $pod_name |
+                    if ($pod_name != "" and ($existing_pods | index($pod_name))) then $msg else empty end
+                else
+                    # Event does not reference a specific pod, include it
+                    $msg
+                end |
+                normalize_blocker
+            ] | unique)
         ) | unique |
 
         # Format output: node_name<TAB>comma-separated-blockers
@@ -388,7 +433,8 @@ function _kubectl_consolidation_show_nodes
     # Check if jq processing succeeded
     if test $jq_status -ne 0; or not test -s $tmp_results
         echo "Warning: Failed to process blocker data (jq status: $jq_status)" >&2
-        # Create fallback results with <none> for all nodes
+        # Clear corrupted results and create fallback with <none> for all nodes
+        : >$tmp_results
         for node in $node_names
             echo "$node\t<none>" >>$tmp_results
         end
