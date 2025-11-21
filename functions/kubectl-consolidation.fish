@@ -274,56 +274,121 @@ function _kubectl_consolidation_show_nodes
             continue
         end
 
-        set -l node_name (string split -n -m 1 " " -- "$lines[$i]" | head -n 1 | string trim)
+        set -l node_name (string split -n -m 1 " " -- "$lines[$i]" | string trim)[1]
         if test -n "$node_name"
             set node_names $node_names $node_name
         end
     end
 
-    # Collect blocker information for each node
-    set -l blocker_info
-    for node_name in $node_names
-        set -l blockers
+    # OPTIMIZATION: Fetch data upfront
+    # If specific nodes requested, only fetch data for those nodes (fast)
+    # If all nodes requested, fetch all data once (slower but still O(1))
 
-        # 1. Check pod annotations
-        set -l pod_blockers (_kubectl_consolidation_check_pod_annotations $node_name)
-        if test -n "$pod_blockers"
-            for blocker in (string split "," -- "$pod_blockers")
-                if not contains $blocker $blockers
-                    set blockers $blockers $blocker
-                end
-            end
+    # Create temp files
+    set -l tmp_pods (mktemp)
+    set -l tmp_events (mktemp)
+
+    # Build field selectors for specific nodes if applicable
+    if test (count $node_names) -le 10
+        # For small number of nodes, fetch pods per-node (much faster)
+        # Collect all pod data first, then merge once (avoids N file operations)
+        for node in $node_names
+            kubectl get pods --all-namespaces --field-selector "spec.nodeName=$node" -o json 2>/dev/null
+        end | jq -s '{items: [.[].items[]]}' >$tmp_pods 2>/dev/null
+        if test $status -ne 0
+            echo "Warning: Failed to fetch pod data for some nodes" >&2
+            echo '{"items":[]}' >$tmp_pods
         end
-
-        # 2. Check node events
-        set -l event_blockers (_kubectl_consolidation_check_node_events $node_name)
-        if test -n "$event_blockers"
-            for blocker in (string split "," -- "$event_blockers")
-                if not contains $blocker $blockers
-                    set blockers $blockers $blocker
-                end
-            end
-        end
-
-        # 3. Check NodeClaim events if enabled
-        if test "$has_nodeclaim_crd" = true
-            set -l nodeclaim_blockers (_kubectl_consolidation_check_nodeclaim_events $node_name)
-            if test -n "$nodeclaim_blockers"
-                for blocker in (string split "," -- "$nodeclaim_blockers")
-                    if not contains $blocker $blockers
-                        set blockers $blockers $blocker
-                    end
-                end
-            end
-        end
-
-        # Format blockers
-        if test (count $blockers) -eq 0
-            set blocker_info $blocker_info "<none>"
-        else
-            set blocker_info $blocker_info (string join "," -- $blockers)
+    else
+        # For many nodes, fetch all pods once
+        if not kubectl get pods --all-namespaces -o json >$tmp_pods 2>&1
+            echo "Warning: Failed to fetch pod data" >&2
+            echo '{"items":[]}' >$tmp_pods
         end
     end
+
+    # Fetch events for specific nodes
+    if test (count $node_names) -le 10
+        # Collect all event data first, then merge once (avoids N file operations)
+        for node in $node_names
+            kubectl get events --all-namespaces --field-selector "involvedObject.kind=Node,involvedObject.name=$node" -o json 2>/dev/null
+        end | jq -s '{items: [.[].items[]]}' >$tmp_events 2>/dev/null
+        if test $status -ne 0
+            echo "Warning: Failed to fetch event data for some nodes" >&2
+            echo '{"items":[]}' >$tmp_events
+        end
+    else
+        # For many nodes, fetch all events once
+        if not kubectl get events --all-namespaces --field-selector involvedObject.kind=Node -o json >$tmp_events 2>&1
+            echo "Warning: Failed to fetch event data" >&2
+            echo '{"items":[]}' >$tmp_events
+        end
+    end
+
+    # OPTIMIZATION: Process ALL nodes in a single jq pass
+    # Build a TSV mapping: node_name<TAB>blockers
+    # COMPLEXITY: O(nodes × (pods + events)) - iterates through all pods/events once per node
+    # This is acceptable because:
+    # - Single jq process (avoids N process spawns)
+    # - All data loaded in memory (no repeated I/O)
+    # - jq's internal filters are highly optimized
+    set -l tmp_results (mktemp)
+
+    # Create temp file with node list (as JSON array)
+    set -l tmp_nodes (mktemp)
+    printf '%s\n' $node_names | jq -R . | jq -s . >$tmp_nodes
+
+    # Single jq invocation to process all data at once
+    # Input: Three JSON files loaded via --slurpfile (pods, events, nodes)
+    # Output: TSV lines of "node_name<TAB>blocker1,blocker2" or "node_name<TAB><none>"
+    jq -r --slurpfile pods $tmp_pods --slurpfile events $tmp_events --slurpfile nodes $tmp_nodes '
+        # Define helper function to normalize event messages to short blocker codes
+        # Used to convert verbose Karpenter event messages into standardized identifiers
+        def normalize_blocker:
+            if test("pdb.*prevent"; "i") then "pdb-violation"
+            elif test("local storage"; "i") then "local-storage"
+            elif test("non-replicated"; "i") then "non-replicated"
+            elif test("would increase cost"; "i") then "would-increase-cost"
+            elif test("in-use security group"; "i") then "in-use-security-group"
+            elif test("on-demand"; "i") then "on-demand-protection"
+            elif test("do-not-consolidate"; "i") then "do-not-consolidate"
+            elif test("do-not-disrupt"; "i") then "do-not-disrupt"
+            elif test("do-not-evict"; "i") then "do-not-evict"
+            else empty
+            end;
+
+        # Iterate over each node name from the input list
+        $nodes[0][] as $node |
+
+        # Collect all consolidation blockers for this node from two sources:
+        (
+            # Source 1: Pod annotations (Karpenter disruption prevention annotations)
+            # Scans all pods on this node for do-not-evict/disrupt/consolidate annotations
+            ([$pods[0].items[] | select(.spec.nodeName == $node) |
+                if .metadata.annotations["karpenter.sh/do-not-evict"] == "true" then "do-not-evict"
+                elif .metadata.annotations["karpenter.sh/do-not-disrupt"] == "true" then "do-not-disrupt"
+                elif .metadata.annotations["karpenter.sh/do-not-consolidate"] == "true" then "do-not-consolidate"
+                else empty
+                end
+            ] | unique) +
+
+            # Source 2: Node events (Karpenter CannotConsolidate events)
+            # Extracts and normalizes blocker reasons from cluster events
+            ([$events[0].items[] | select(.involvedObject.kind == "Node" and .involvedObject.name == $node and (.reason == "CannotConsolidate" or (.message | test("consolidation"; "i")))) | .message | normalize_blocker] | unique)
+        ) | unique |
+
+        # Format output: node_name<TAB>comma-separated-blockers
+        # Example: "node-1<TAB>do-not-evict,pdb-violation" or "node-2<TAB><none>"
+        $node + "\t" + (if length > 0 then join(",") else "<none>" end)
+    ' -n >$tmp_results 2>/dev/null
+
+    rm -f $tmp_nodes
+
+    # Read results into array (single pass - O(n) instead of O(n²))
+    set -l blocker_info (cut -f2 $tmp_results)
+
+    # Cleanup temp files
+    rm -f $tmp_pods $tmp_events $tmp_results
 
     # Output the augmented table
     if test "$has_header" = true
@@ -349,116 +414,4 @@ function _kubectl_consolidation_show_nodes
     end
 
     return 0
-end
-
-# Helper function: Check pod annotations for blockers
-function _kubectl_consolidation_check_pod_annotations
-    set -l node_name $argv[1]
-    set -l blockers
-
-    # Get pods with blocking annotations
-    set -l pods_json (kubectl get pods --all-namespaces --field-selector "spec.nodeName=$node_name" -o json 2>/dev/null)
-    set -l kubectl_status $status
-
-    if test $kubectl_status -eq 0; and test -n "$pods_json"
-        set -l has_do_not_evict (echo "$pods_json" | jq -r '[.items[].metadata.annotations["karpenter.sh/do-not-evict"]? // ""] | any(. == "true")' 2>/dev/null)
-        set -l has_do_not_disrupt (echo "$pods_json" | jq -r '[.items[].metadata.annotations["karpenter.sh/do-not-disrupt"]? // ""] | any(. == "true")' 2>/dev/null)
-        set -l has_do_not_consolidate (echo "$pods_json" | jq -r '[.items[].metadata.annotations["karpenter.sh/do-not-consolidate"]? // ""] | any(. == "true")' 2>/dev/null)
-
-        if test "$has_do_not_evict" = true
-            set blockers $blockers do-not-evict
-        end
-        if test "$has_do_not_disrupt" = true
-            set blockers $blockers do-not-disrupt
-        end
-        if test "$has_do_not_consolidate" = true
-            set blockers $blockers do-not-consolidate
-        end
-    end
-
-    if test (count $blockers) -gt 0
-        string join "," -- $blockers
-    end
-end
-
-# Helper function: Check node events for blockers
-function _kubectl_consolidation_check_node_events
-    set -l node_name $argv[1]
-    set -l blockers
-
-    # Get recent events for this node
-    set -l events (kubectl get events --field-selector "involvedObject.name=$node_name,involvedObject.kind=Node" \
-        --sort-by='.lastTimestamp' -o json 2>/dev/null | \
-        jq -r '.items[] | select(.reason == "CannotConsolidate" or (.message | contains("consolidation")) or (.message | contains("Consolidation"))) | .message' 2>/dev/null)
-
-    # Normalize event messages to short codes
-    for event in $events
-        set -l normalized (_kubectl_consolidation_normalize_event $event)
-        if test -n "$normalized"
-            if not contains $normalized $blockers
-                set blockers $blockers $normalized
-            end
-        end
-    end
-
-    if test (count $blockers) -gt 0
-        string join "," -- $blockers
-    end
-end
-
-# Helper function: Check NodeClaim events for blockers
-function _kubectl_consolidation_check_nodeclaim_events
-    set -l node_name $argv[1]
-    set -l blockers
-
-    # Get NodeClaim name for this node
-    set -l nodeclaim_name (kubectl get nodeclaims -o json 2>/dev/null | \
-        jq -r --arg node "$node_name" '.items[] | select(.status.nodeName == $node) | .metadata.name' 2>/dev/null)
-
-    if test -n "$nodeclaim_name"
-        # Get events for this NodeClaim
-        set -l events (kubectl get events --field-selector "involvedObject.name=$nodeclaim_name,involvedObject.kind=NodeClaim" \
-            --sort-by='.lastTimestamp' -o json 2>/dev/null | \
-            jq -r '.items[] | select(.reason == "CannotConsolidate" or (.message | contains("consolidation")) or (.message | contains("Consolidation"))) | .message' 2>/dev/null)
-
-        # Normalize event messages
-        for event in $events
-            set -l normalized (_kubectl_consolidation_normalize_event $event)
-            if test -n "$normalized"
-                if not contains $normalized $blockers
-                    set blockers $blockers $normalized
-                end
-            end
-        end
-    end
-
-    if test (count $blockers) -gt 0
-        string join "," -- $blockers
-    end
-end
-
-# Helper function: Normalize event messages to short codes
-function _kubectl_consolidation_normalize_event
-    set -l event_message $argv[1]
-
-    # Match event message patterns to short codes
-    if string match -q -i "*pdb*prevent*" -- "$event_message"
-        echo pdb-violation
-    else if string match -q -i "*local storage*" -- "$event_message"
-        echo local-storage
-    else if string match -q -i "*non-replicated*" -- "$event_message"
-        echo non-replicated
-    else if string match -q -i "*would increase cost*" -- "$event_message"
-        echo would-increase-cost
-    else if string match -q -i "*in-use security group*" -- "$event_message"
-        echo in-use-security-group
-    else if string match -q -i "*on-demand*" -- "$event_message"
-        echo on-demand-protection
-    else if string match -q -i "*do-not-consolidate*" -- "$event_message"
-        echo do-not-consolidate
-    else if string match -q -i "*do-not-disrupt*" -- "$event_message"
-        echo do-not-disrupt
-    else if string match -q -i "*do-not-evict*" -- "$event_message"
-        echo do-not-evict
-    end
 end
