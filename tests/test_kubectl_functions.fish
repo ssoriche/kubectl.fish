@@ -13,7 +13,7 @@
 #   - Mock utilities for unit tests
 
 # Test configuration
-set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff k
+set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-consolidation k
 set -g test_results_passed 0
 set -g test_results_failed 0
 set -g test_results_skipped 0
@@ -82,18 +82,21 @@ function test_help_functionality
     test_assert "kubectl-really-all --help" "kubectl-really-all --help >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-why-not-deleted --help" "kubectl-why-not-deleted --help >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-dyff --help" "kubectl-dyff --help >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl-consolidation --help" "kubectl-consolidation --help >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "k --help" "k --help >/dev/null 2>&1; test \$status -eq 0" 0
 
     # Test short help option
     test_assert "kubectl-gron -h" "kubectl-gron -h >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-why-not-deleted -h" "kubectl-why-not-deleted -h >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-dyff -h" "kubectl-dyff -h >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl-consolidation -h" "kubectl-consolidation -h >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "k -h" "k -h >/dev/null 2>&1; test \$status -eq 0" 0
 
     # Test that help output contains expected content
     test_assert "kubectl-gron help contains USAGE" "kubectl-gron --help | grep -q 'USAGE:'" 0
     test_assert "kubectl-why-not-deleted help contains USAGE" "kubectl-why-not-deleted --help | grep -q 'USAGE:'" 0
     test_assert "kubectl-dyff help contains USAGE" "kubectl-dyff --help | grep -q 'USAGE:'" 0
+    test_assert "kubectl-consolidation help contains USAGE" "kubectl-consolidation --help | grep -q 'USAGE:'" 0
     test_assert "k help contains AVAILABLE FUNCTIONS" "k --help | grep -q 'AVAILABLE KUBECTL.FISH FUNCTIONS:'" 0
 end
 
@@ -110,6 +113,7 @@ function test_prerequisite_checking
     test_assert "kubectl-dump without kubectl command" "kubectl-dump pods" 1
     test_assert "kubectl-why-not-deleted without kubectl command" "kubectl-why-not-deleted pod test" 1
     test_assert "kubectl-dyff without kubectl command" "kubectl-dyff test.yaml" 1
+    test_assert "kubectl-consolidation without kubectl command" kubectl-consolidation 1
     test_assert "k without kubectl command" "k get pods" 1
 
     # Restore PATH
@@ -175,6 +179,26 @@ function test_prerequisite_checking
         test_skip "kubectl-why-not-deleted without jq" "kubectl not available"
     end
 
+    # Test jq prerequisite for kubectl-consolidation
+    function test_jq_missing_consolidation
+        # Temporarily hide jq command
+        function jq
+            return 127
+        end
+
+        kubectl-consolidation
+        set -l result $status
+
+        functions -e jq
+        return $result
+    end
+
+    if command -q kubectl
+        test_assert "kubectl-consolidation without jq" test_jq_missing_consolidation 1
+    else
+        test_skip "kubectl-consolidation without jq" "kubectl not available"
+    end
+
     # Test dyff prerequisite for kubectl-dyff
     function test_dyff_missing
         # Temporarily hide dyff command
@@ -216,7 +240,7 @@ function test_prerequisite_checking
     end
 
     # Clean up test functions
-    functions -e test_gron_missing test_jq_missing test_jq_missing_why_not_deleted test_dyff_missing test_yq_missing
+    functions -e test_gron_missing test_jq_missing test_jq_missing_why_not_deleted test_jq_missing_consolidation test_dyff_missing test_yq_missing
 end
 
 function test_argument_validation
@@ -251,6 +275,7 @@ function test_consistency
     test_assert "kubectl-dump error format" "kubectl-dump 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-why-not-deleted error format" "kubectl-why-not-deleted 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-dyff error format" "kubectl-dyff 2>&1 | grep -q '^Error:'" 0
+    test_assert "kubectl-consolidation error format" "kubectl-consolidation 2>&1 | grep -q '^Error:'" 0
     test_assert "k error format" "k 2>&1 | grep -q '^Error:'" 0
 
     # Test that all functions use consistent --wraps annotation (check function definition)
@@ -260,6 +285,7 @@ function test_consistency
     test_assert "kubectl-really-all has proper wraps" "functions kubectl-really-all | grep -q 'kubectl'" 0
     test_assert "kubectl-why-not-deleted has proper wraps" "functions kubectl-why-not-deleted | grep -q 'kubectl'" 0
     test_assert "kubectl-dyff has proper wraps" "functions kubectl-dyff | grep -q 'kubectl'" 0
+    test_assert "kubectl-consolidation has proper wraps" "functions kubectl-consolidation | grep -q 'kubectl'" 0
     test_assert "k has proper wraps" "functions k | grep -q 'kubectl'" 0
 end
 
@@ -341,8 +367,33 @@ function test_argument_forwarding
 
     test_assert "kubectl-dump forwards namespace argument" test_kubectl_dump_forwarding 0
 
+    # Test kubectl-consolidation argument forwarding
+    function test_kubectl_consolidation_forwarding
+        set -g temp_consolidation_file (mktemp)
+        function kubectl
+            echo "kubectl $argv" >$temp_consolidation_file
+            # Return mock node output to avoid errors
+            echo "NAME          STATUS   ROLES    AGE   VERSION"
+            echo "test-node-1   Ready    <none>   5d    v1.28.0"
+        end
+
+        kubectl-consolidation -l node-type=spot >/dev/null 2>&1
+        set -l captured_command (cat $temp_consolidation_file)
+
+        functions -e kubectl
+        rm -f $temp_consolidation_file
+
+        echo $captured_command | grep -q "kubectl get nodes -l node-type=spot"
+    end
+
+    if command -q jq
+        test_assert "kubectl-consolidation forwards label selector" test_kubectl_consolidation_forwarding 0
+    else
+        test_skip "kubectl-consolidation argument forwarding" "jq not available"
+    end
+
     # Clean up test functions
-    functions -e test_kubectl_list_events_forwarding test_kubectl_gron_forwarding test_kubectl_dump_forwarding
+    functions -e test_kubectl_list_events_forwarding test_kubectl_gron_forwarding test_kubectl_dump_forwarding test_kubectl_consolidation_forwarding
 end
 
 function test_integration_basic
@@ -391,6 +442,13 @@ function test_integration_basic
     else
         test_skip "kubectl-why-not-deleted execution" "jq not available"
     end
+
+    # Test kubectl-consolidation
+    if command -q jq
+        test_assert "kubectl-consolidation execution" "kubectl-consolidation >/dev/null 2>&1; test \$status -eq 0" 0
+    else
+        test_skip "kubectl-consolidation execution" "jq not available"
+    end
 end
 
 function test_function_registration
@@ -426,6 +484,7 @@ function test_linting_standards
     test_assert "Fish syntax validation" "fish -n functions/kubectl-really-all.fish" 0
     test_assert "Fish syntax validation" "fish -n functions/kubectl-why-not-deleted.fish" 0
     test_assert "Fish syntax validation" "fish -n functions/kubectl-dyff.fish" 0
+    test_assert "Fish syntax validation" "fish -n functions/kubectl-consolidation.fish" 0
     test_assert "Fish syntax validation" "fish -n functions/k.fish" 0
 
     # Test formatting consistency
