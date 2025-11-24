@@ -86,7 +86,6 @@ function kubectl-consolidation -d "Show nodes with Karpenter consolidation block
         echo "  do-not-disrupt        Pod has karpenter.sh/do-not-disrupt annotation"
         echo "  do-not-consolidate    Node/Pod has do-not-consolidate annotation"
         echo "  pdb-violation         PodDisruptionBudget prevents disruption"
-        echo "  local-storage         Pod uses local storage (emptyDir)"
         echo "  non-replicated        Pod has no controller (standalone)"
         echo "  would-increase-cost   Consolidation would increase costs"
         echo "  in-use-security-group Node security group in use"
@@ -196,14 +195,13 @@ function _kubectl_consolidation_show_pods
             continue
         end
 
-        # Find blocking pods
+        # Find blocking pods (only Karpenter disruption annotations)
         echo "$pods_json" | jq -r --arg node "$node_name" '
             .items[] |
             select(
                 (.metadata.annotations["karpenter.sh/do-not-evict"] == "true") or
                 (.metadata.annotations["karpenter.sh/do-not-disrupt"] == "true") or
-                (.metadata.annotations["karpenter.sh/do-not-consolidate"] == "true") or
-                (.spec.volumes[]? | select(.emptyDir != null))
+                (.metadata.annotations["karpenter.sh/do-not-consolidate"] == "true")
             ) |
             {
                 node: $node,
@@ -213,7 +211,6 @@ function _kubectl_consolidation_show_pods
                     if .metadata.annotations["karpenter.sh/do-not-evict"] == "true" then "do-not-evict"
                     elif .metadata.annotations["karpenter.sh/do-not-disrupt"] == "true" then "do-not-disrupt"
                     elif .metadata.annotations["karpenter.sh/do-not-consolidate"] == "true" then "do-not-consolidate"
-                    elif (.spec.volumes[]? | select(.emptyDir != null)) then "local-storage"
                     else "unknown"
                     end
                 )
