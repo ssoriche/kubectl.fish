@@ -362,15 +362,17 @@ function _kubectl_consolidation_show_nodes
         # Define helper function to normalize event messages to short blocker codes
         # Used to convert verbose Karpenter event messages into standardized identifiers
         def normalize_blocker:
-            if test("pdb.*prevent"; "i") then "pdb-violation"
-            elif test("local storage"; "i") then "local-storage"
-            elif test("non-replicated"; "i") then "non-replicated"
-            elif test("would increase cost"; "i") then "would-increase-cost"
-            elif test("in-use security group"; "i") then "in-use-security-group"
-            elif test("on-demand"; "i") then "on-demand-protection"
-            elif test("do-not-consolidate"; "i") then "do-not-consolidate"
-            elif test("do-not-disrupt"; "i") then "do-not-disrupt"
-            elif test("do-not-evict"; "i") then "do-not-evict"
+            . as $input |
+            if ($input | type) != "string" then empty
+            elif ($input | test("pdb.*prevent"; "i")) then "pdb-violation"
+            elif ($input | test("local storage"; "i")) then "local-storage"
+            elif ($input | test("non-replicated"; "i")) then "non-replicated"
+            elif ($input | test("would increase cost"; "i")) then "would-increase-cost"
+            elif ($input | test("in-use security group"; "i")) then "in-use-security-group"
+            elif ($input | test("on-demand"; "i")) then "on-demand-protection"
+            elif ($input | test("do-not-consolidate"; "i")) then "do-not-consolidate"
+            elif ($input | test("do-not-disrupt"; "i")) then "do-not-disrupt"
+            elif ($input | test("do-not-evict"; "i")) then "do-not-evict"
             else empty
             end;
 
@@ -404,15 +406,18 @@ function _kubectl_consolidation_show_nodes
             # Extract and normalize blocker reasons from Karpenter events
             # IMPORTANT: Only include event-based blockers if the referenced pod still exists
             ([($events_by_node[$node] // [])[] |
-                select(.reason == "CannotConsolidate" or .reason == "DeprovisioningBlocked" or .reason == "DisruptionBlocked" or (.message // "" | test("consolidat|deprovision|disrupt"; "i"))) |
-                .message // "" |
-                select(. != "") |
+                select(
+                    (.reason // "") as $r |
+                    (.message // "") as $m |
+                    ($r == "CannotConsolidate" or $r == "DeprovisioningBlocked" or $r == "DisruptionBlocked" or (($m | length) > 0 and ($m | test("consolidat|deprovision|disrupt"; "i"))))
+                ) |
+                (.message // "") as $msg |
+                if ($msg == "" or ($msg | length) == 0) then empty
                 # Extract pod name from message format: Pod "namespace/podname"
                 # Only process if the pod still exists on this node
-                . as $msg |
-                if ($msg | test("Pod ")) then
+                elif (($msg | length) > 0 and ($msg | test("Pod \""))) then
                     # Try to extract pod name (format: Pod "namespace/podname")
-                    ($msg | capture("Pod \"(?<pod>[^\"]+)\"") | .pod // "") as $pod_name |
+                    (($msg | capture("Pod \"(?<pod>[^\"]+)\""; "i") | .pod) // "") as $pod_name |
                     if ($pod_name != "" and ($existing_pods | index($pod_name))) then $msg else empty end
                 else
                     # Event does not reference a specific pod, include it
