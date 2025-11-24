@@ -430,18 +430,24 @@ function _kubectl_consolidation_show_nodes
         # Format output: node_name<TAB>comma-separated-blockers
         # Example: "node-1<TAB>do-not-evict,pdb-violation" or "node-2<TAB><none>"
         $node + "\t" + (if length > 0 then join(",") else "<none>" end)
-    ' -n >$tmp_results 2>&1
+    ' -n >$tmp_results 2>/dev/null
     set -l jq_status $status
 
     rm -f $tmp_nodes
 
     # Check if jq processing succeeded
-    if test $jq_status -ne 0; or not test -s $tmp_results
-        echo "Warning: Failed to process blocker data (jq status: $jq_status)" >&2
-        # Clear corrupted results and create fallback with <none> for all nodes
-        : >$tmp_results
+    if test $jq_status -ne 0
+        echo "Warning: jq processing failed (exit code: $jq_status)" >&2
+        # Create fallback results with <none> for all nodes
+        echo -n '' >$tmp_results
         for node in $node_names
-            echo "$node\t<none>" >>$tmp_results
+            printf '%s\t<none>\n' "$node" >>$tmp_results
+        end
+    else if not test -s $tmp_results
+        echo "Warning: jq produced empty results" >&2
+        # Create fallback results with <none> for all nodes
+        for node in $node_names
+            printf '%s\t<none>\n' "$node" >>$tmp_results
         end
     end
 
