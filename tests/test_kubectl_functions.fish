@@ -263,7 +263,13 @@ function test_argument_validation
     test_assert "kubectl-gron suggests --help" "kubectl-gron 2>&1 | grep -q 'kubectl-gron --help'" 0
     test_assert "kubectl-dump suggests --help" "kubectl-dump 2>&1 | grep -q 'kubectl-dump --help'" 0
     test_assert "kubectl-why-not-deleted shows usage" "kubectl-why-not-deleted 2>&1 | grep -q 'kubectl-why-not-deleted --help'" 0
-    test_assert "kubectl-dyff shows usage" "kubectl-dyff 2>&1 | grep -q 'kubectl-dyff --help'" 0
+
+    if command -q dyff; and command -q yq
+        test_assert "kubectl-dyff shows usage" "kubectl-dyff 2>&1 | grep -q 'kubectl-dyff --help'" 0
+    else
+        test_skip "kubectl-dyff shows usage" "dyff or yq not available"
+    end
+
     test_assert "k suggests --help" "k 2>&1 | grep -q 'k --help'" 0
 end
 
@@ -275,7 +281,7 @@ function test_consistency
     test_assert "kubectl-dump error format" "kubectl-dump 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-why-not-deleted error format" "kubectl-why-not-deleted 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-dyff error format" "kubectl-dyff 2>&1 | grep -q '^Error:'" 0
-    test_assert "kubectl-consolidation error format" "kubectl-consolidation 2>&1 | grep -q '^Error:'" 0
+    test_assert "kubectl-consolidation error format" "kubectl-consolidation --pods 2>&1 | grep -q '^Error:'" 0
     test_assert "k error format" "k 2>&1 | grep -q '^Error:'" 0
 
     # Test that all functions use consistent --wraps annotation (check function definition)
