@@ -434,12 +434,10 @@ function _kubectl_consolidation_show_nodes
 
     # Check if jq processing succeeded
     if test $jq_status -ne 0
-        echo "Warning: jq processing failed (exit code: $jq_status)" >&2
-        # Create fallback results with <none> for all nodes
-        echo -n '' >$tmp_results
-        for node in $node_names
-            printf '%s\t<none>\n' "$node" >>$tmp_results
-        end
+        echo "Error: jq processing failed (exit code: $jq_status)" >&2
+        echo "This usually indicates jq is not available or encountered invalid data" >&2
+        rm -f $tmp_pods $tmp_events $tmp_results
+        return 1
     else if not test -s $tmp_results
         echo "Warning: jq produced empty results" >&2
         # Create fallback results with <none> for all nodes
