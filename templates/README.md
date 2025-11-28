@@ -94,13 +94,40 @@ k get nodes ^nodes-custom
 
 ## Available Templates
 
-This directory includes example templates. More templates can be imported from the original zsh kubectl plugin (see Phase 6 of implementation plan).
+This directory includes both example templates and production-ready templates imported from the original zsh kubectl plugin.
 
-### Example Templates Included
+### Basic Templates
 
 - `pods-wide.tmpl` - Extended pod information view
 - `nodes-custom.tmpl` - Node information with capacity
 - `deployments.tmpl` - Deployment status overview
+
+### Imported from zsh kubectl plugin
+
+Credit: https://github.com/ripta/dotfiles/tree/master/zsh-custom/plugins/kube/templates
+
+#### Node Management
+- `nodes.tmpl` - Node capacity and allocatable resources
+- `cordoned.tmpl` - Show cordoned nodes with timestamp
+- `taints.tmpl` - Display node taints
+
+#### Pod Analysis
+- `images.tmpl` - Pod name, status, and container images
+- `qos.tmpl` - Pod Quality of Service class
+- `owners.tmpl` - Pod ownership references
+- `timestamps.tmpl` - Resource creation, deletion, and start times
+
+#### Service Mesh
+- `linkerd.tmpl` - Linkerd service mesh injection and proxy status
+
+#### ScaleOps Integration
+- `scaleops-pod.tmpl` - ScaleOps admission and policy info
+- `scaleops-pod-wide.tmpl` - Extended ScaleOps pod details
+- `scaleops-hpa.tmpl` - ScaleOps HPA analysis data
+
+#### Resource Management
+- `crds.tmpl` - Custom Resource Definitions with conversion strategy
+- `finalizers.tmpl` - Resources with finalizers blocking deletion
 
 ## Importing Templates from zsh Plugin
 
