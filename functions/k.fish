@@ -40,9 +40,16 @@ function k -d "Smart kubectl wrapper with plugin support" --wraps kubectl
         echo ""
         echo "EXAMPLES:"
         echo "  k get pods                    # Regular kubectl command"
+        echo "  k get pods ^pods-wide         # Enhanced get with template"
+        echo "  k get pods .items[0].metadata.name  # Enhanced get with jq"
         echo "  k gron pods                   # Uses kubectl-gron function"
         echo "  k list-events                 # Uses kubectl-list-events function"
         echo "  k really-all                  # Uses kubectl-really-all function"
+        echo ""
+        echo "ENHANCED GET SYNTAX:"
+        echo "  ^template-name                # Use custom-columns template"
+        echo "  .field                        # Extract JSON field with jq"
+        echo "  (See 'kubectl-get --help' for more details)"
         echo ""
         echo "AVAILABLE KUBECTL.FISH FUNCTIONS:"
         set -l available_functions (functions -n | string match 'kubectl-*' | string replace 'kubectl-' '')
@@ -82,17 +89,41 @@ function k -d "Smart kubectl wrapper with plugin support" --wraps kubectl
         # Run the kubectl function with remaining arguments
         $k_func $argv[2..-1]
         return $status
-    else
-        # Determine which kubectl command to use
-        set -l k_cmd
-        if command -q kubecolor
-            set k_cmd kubecolor
-        else
-            set k_cmd kubectl
+    end
+
+    # Check if this is an enhanced get command
+    if test "$argv[1]" = get
+        # Detect enhanced syntax in arguments
+        set -l has_enhanced 0
+        for arg in $argv[2..-1]
+            if string match -q '^*' -- $arg
+                # Template syntax detected
+                set has_enhanced 1
+                break
+            else if string match -q '.*' -- $arg
+                # Only treat as jq if it looks like .field (not ./path)
+                if not string match -q './*' -- $arg
+                    set has_enhanced 1
+                    break
+                end
+            end
         end
 
-        # Run kubectl/kubecolor with all arguments
-        $k_cmd $argv
-        return $status
+        if test $has_enhanced -eq 1
+            kubectl-get $argv[2..-1]
+            return $status
+        end
     end
+
+    # Determine which kubectl command to use
+    set -l k_cmd
+    if command -q kubecolor
+        set k_cmd kubecolor
+    else
+        set k_cmd kubectl
+    end
+
+    # Run kubectl/kubecolor with all arguments
+    $k_cmd $argv
+    return $status
 end
