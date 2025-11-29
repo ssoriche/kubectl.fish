@@ -10,11 +10,14 @@ A collection of kubectl plugins and functions written in fish shell, designed to
 ## 🚀 Features
 
 - **Smart kubectl wrapper** (`k`) with plugin support and colorized output
+- **Enhanced kubectl get** with template system, jq integration, and smart sorting
+- **Kubeconfig switching** with `kt` for quick context changes
 - **Resource dumping** with `kubectl-gron` (flatten JSON) and `kubectl-dump` (YAML output)
 - **Enhanced event viewing** with `kubectl-list-events` (sorted by timestamp)
 - **Comprehensive resource listing** with `kubectl-really-all` (all namespaced resources)
 - **Deletion analysis** with `kubectl-why-not-deleted` (debug stuck deletions)
 - **Karpenter consolidation insights** with `kubectl-consolidation` (view consolidation blockers)
+- **16 production-ready templates** imported from the zsh kubectl plugin
 - **Robust error handling** and prerequisite checking
 - **Comprehensive test suite** for reliability
 - **Fish shell best practices** with proper documentation
@@ -82,10 +85,124 @@ k [kubectl-command] [args...]
 
 ```bash
 k get pods                    # Regular kubectl command
+k get pods ^pods-wide         # Enhanced get with template
+k get pods .items[0].metadata.name  # Enhanced get with jq
 k gron pods                   # Uses kubectl-gron function
 k list-events                 # Uses kubectl-list-events function
 k really-all                  # Uses kubectl-really-all function
 k consolidation               # Uses kubectl-consolidation function
+```
+
+### `kubectl-get` - Enhanced kubectl get with templates and jq
+
+An enhanced `kubectl get` wrapper that adds custom-columns templates, jq field extraction, and smart sorting.
+
+**Features:**
+
+- **Template System**: Load custom-columns templates with `^template-name` syntax
+- **jq Integration**: Extract JSON fields with `.field` syntax
+- **Smart Sorting**: Auto-sort events, nodes, and replicasets by relevant timestamps
+
+**Dependencies:** `jq` (for `.field` syntax only)
+
+**Template Locations:**
+
+Templates are searched in order:
+1. `$KUBECTL_TEMPLATES_DIR` (if set)
+2. `~/.kube/templates/`
+
+**Usage:**
+
+```bash
+# Standard kubectl get
+kubectl-get pods
+k get pods
+
+# Use a template
+kubectl-get pods ^pods-wide
+k get pods ^images
+
+# Extract JSON field with jq
+kubectl-get pods .items[0].metadata.name
+k get pods .items[*].status.podIP
+
+# Smart sorting (automatic)
+k get events                  # Auto-sorted by lastTimestamp
+k get nodes                   # Auto-sorted by creationTimestamp
+```
+
+**Available Templates:**
+
+16 production-ready templates included (see `templates/README.md`):
+
+- **Node Management**: `nodes`, `cordoned`, `taints`
+- **Pod Analysis**: `pods-wide`, `images`, `qos`, `owners`, `timestamps`
+- **Service Mesh**: `linkerd`
+- **ScaleOps**: `scaleops-pod`, `scaleops-pod-wide`, `scaleops-hpa`
+- **Resources**: `crds`, `finalizers`, `deployments`
+
+**Creating Custom Templates:**
+
+Create a `.tmpl` file in one of the template directories:
+
+```bash
+# Create a custom pod template
+mkdir -p ~/.kube/templates
+echo "NAME:.metadata.name,IP:.status.podIP,NODE:.spec.nodeName" > \
+    ~/.kube/templates/my-pods.tmpl
+
+# Use it
+k get pods ^my-pods
+```
+
+See `templates/README.md` for comprehensive template documentation and examples.
+
+### `kt` - Kubeconfig switcher
+
+Quickly switch between different kubectl configuration files.
+
+**Usage:**
+
+```bash
+kt                      # List available configs
+kt production           # Switch to production config
+kt staging              # Switch to staging config
+kt ~/.kube/dev          # Use absolute path
+```
+
+**Search Paths:**
+
+- `~/.kube/configs/`
+- `~/.ssh/kubeconfigs/`
+
+**Examples:**
+
+```bash
+# List all available configs (* marks current)
+kt
+
+# Switch to production
+kt production
+
+# Switch to development
+kt development
+
+# Check what config you're using
+echo $KUBECONFIG
+```
+
+**Setup:**
+
+Organize your kubeconfig files:
+
+```bash
+mkdir -p ~/.kube/configs
+mv ~/.kube/config-prod ~/.kube/configs/production
+mv ~/.kube/config-dev ~/.kube/configs/development
+
+# Now switch easily
+kt production
+kt development
 ```
 
 ### `kubectl-gron` - JSON resource flattening
