@@ -13,7 +13,7 @@
 #   - Mock utilities for unit tests
 
 # Test configuration
-set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-consolidation k
+set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-consolidation kubectl-get kt k __kubectl_find_template __kubectl_parse_get_args
 set -g test_results_passed 0
 set -g test_results_failed 0
 set -g test_results_skipped 0
@@ -519,6 +519,122 @@ function test_linting_standards
     end
 end
 
+function test_kubectl_get_functionality
+    echo "=== Testing kubectl-get Functionality ==="
+
+    # Test help functionality
+    test_assert "kubectl-get --help" "kubectl-get --help >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl-get -h" "kubectl-get -h >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl-get help contains USAGE" "kubectl-get --help | grep -q 'USAGE:'" 0
+    test_assert "kubectl-get help contains TEMPLATE SYNTAX" "kubectl-get --help | grep -q 'TEMPLATE SYNTAX:'" 0
+
+    # Test argument validation
+    test_assert "kubectl-get with no arguments" "kubectl-get 2>&1 | grep -q 'Error: No arguments provided'" 0
+
+    # Test template discovery helper
+    if functions -q __kubectl_find_template
+        # Create temporary template for testing
+        set -l temp_dir (mktemp -d)
+        mkdir -p $temp_dir
+        echo "NAME:.metadata.name" >$temp_dir/test.tmpl
+
+        test_assert "__kubectl_find_template with KUBECTL_TEMPLATES_DIR" \
+            "KUBECTL_TEMPLATES_DIR=$temp_dir __kubectl_find_template test | grep -q 'test.tmpl'" 0
+
+        # Cleanup
+        rm -rf $temp_dir
+    end
+
+    # Test argument parsing helper
+    if functions -q __kubectl_parse_get_args
+        test_assert "__kubectl_parse_get_args detects template syntax" \
+            "__kubectl_parse_get_args pods ^test | grep -q 'template:test'" 0
+
+        test_assert "__kubectl_parse_get_args detects jq syntax" \
+            "__kubectl_parse_get_args pods .items | grep -q 'jq:.items'" 0
+
+        test_assert "__kubectl_parse_get_args preserves args" \
+            "__kubectl_parse_get_args pods -n default | grep -q 'args:.*-n.*default'" 0
+    end
+end
+
+function test_kt_functionality
+    echo "=== Testing kt Functionality ==="
+
+    # Test help functionality
+    test_assert "kt --help" "kt --help >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kt -h" "kt -h >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kt help contains USAGE" "kt --help | grep -q 'USAGE:'" 0
+    test_assert "kt help contains SEARCH PATHS" "kt --help | grep -q 'SEARCH PATHS:'" 0
+
+    # Test list mode (no arguments)
+    test_assert "kt list mode" "kt >/dev/null 2>&1; test \$status -eq 0" 0
+
+    # Test error handling for non-existent config
+    test_assert "kt with non-existent config" "kt nonexistent-config-12345 2>&1 | grep -q 'Error: Cannot find kubeconfig'" 0
+end
+
+function test_enhanced_k_wrapper
+    echo "=== Testing Enhanced k Wrapper ==="
+
+    # Test that k help mentions enhanced get
+    test_assert "k help contains ENHANCED GET SYNTAX" "k --help | grep -q 'ENHANCED GET SYNTAX:'" 0
+
+    # Test kubectl-get is listed in available functions
+    if functions -q kubectl-get
+        test_assert "kubectl-get in k --help output" "k --help | grep -q 'get'" 0
+    end
+
+    # Test kt is listed in available functions
+    if functions -q kt
+        test_assert "kt in k --help output" "k --help | grep -q 'Functions:' || k --help" 0
+    end
+end
+
+function test_template_system
+    echo "=== Testing Template System ==="
+
+    # Check that template directory exists
+    if test -d templates
+        echo "✓ templates/ directory exists"
+        set -g test_results_passed (math $test_results_passed + 1)
+
+        # Check for README
+        if test -f templates/README.md
+            echo "✓ templates/README.md exists"
+            set -g test_results_passed (math $test_results_passed + 1)
+        else
+            echo "✗ templates/README.md missing"
+            set -g test_results_failed (math $test_results_failed + 1)
+        end
+
+        # Count template files
+        set -l template_count (ls templates/*.tmpl 2>/dev/null | wc -l | string trim)
+        if test $template_count -gt 0
+            echo "✓ Found $template_count template files"
+            set -g test_results_passed (math $test_results_passed + 1)
+        else
+            echo "✗ No template files found"
+            set -g test_results_failed (math $test_results_failed + 1)
+        end
+
+        # Verify key imported templates exist
+        for tmpl in nodes pods-wide images qos taints
+            if test -f templates/$tmpl.tmpl
+                echo "✓ Template $tmpl.tmpl exists"
+                set -g test_results_passed (math $test_results_passed + 1)
+            else
+                echo "✗ Template $tmpl.tmpl missing"
+                set -g test_results_failed (math $test_results_failed + 1)
+            end
+        end
+    else
+        echo "✗ templates/ directory missing"
+        set -g test_results_failed (math $test_results_failed + 1)
+    end
+    echo
+end
+
 function run_all_tests
     echo "🧪 kubectl.fish Function Test Suite"
     echo "=================================="
@@ -533,6 +649,10 @@ function run_all_tests
     test_function_registration
     test_integration_basic
     test_linting_standards
+    test_kubectl_get_functionality
+    test_kt_functionality
+    test_enhanced_k_wrapper
+    test_template_system
 
     echo "=== Test Results Summary ==="
     echo "Passed:  $test_results_passed"
