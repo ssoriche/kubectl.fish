@@ -34,6 +34,47 @@ alias kall='kubectl-really-all'
 alias kyml='kubectl-dump'
 
 # =====================================
+# Enhanced kubectl get with Templates
+# =====================================
+
+# Set custom template directory (optional - for non-standard locations)
+# set -gx KUBECTL_TEMPLATES_DIR ~/my-custom-templates
+
+# Templates are stored in ~/.kube/templates/ by default
+# This uses kubectl's native custom-columns functionality
+
+# Template aliases for common operations
+alias kgpt='k get pods ^pods-wide'              # Pods with extended info
+alias kgpi='k get pods ^images'                 # Pods with image names
+alias kgpq='k get pods ^qos'                    # Pods with QoS class
+alias kgpo='k get pods ^owners'                 # Pods with owner references
+
+# Node template aliases
+alias kgnt='k get nodes ^nodes'                 # Nodes with capacity
+alias kgnc='k get nodes ^cordoned'              # Show cordoned nodes
+alias kgntaint='k get nodes ^taints'            # Nodes with taints
+
+# Other resource templates
+alias kgcrds='k get crds ^crds'                 # CRDs with conversion strategy
+alias kgfin='k get all ^finalizers'             # Resources with finalizers
+alias kgts='k get pods ^timestamps'             # Resources with timestamps
+
+# jq integration examples
+# Extract just pod names: k get pods .items[*].metadata.name
+# Get first pod IP: k get pods .items[0].status.podIP
+
+# =====================================
+# kt (kubeconfig switching) Integration
+# =====================================
+
+# Quick kubeconfig switching aliases
+# Requires config files in ~/.kube/configs/ or ~/.ssh/kubeconfigs/
+alias ktp='kt production'
+alias kts='kt staging'
+alias ktd='kt development'
+alias ktl='kt'  # List all available configs
+
+# =====================================
 # Enhanced Kubernetes Workflow
 # =====================================
 
