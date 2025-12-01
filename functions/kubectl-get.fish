@@ -165,7 +165,7 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
         # Get the resource type (first non-flag argument)
         set -l resource_type ""
         for arg in $kubectl_args
-            if not string match -q '-*' -- $arg
+            if not string match -qr '^-' -- $arg
                 set resource_type $arg
                 break
             end
