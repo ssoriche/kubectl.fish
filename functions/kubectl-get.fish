@@ -22,8 +22,11 @@
 #     kubectl-get pods -n kube-system ^scaleops-pod  # Template with namespace
 #
 # TEMPLATE SYNTAX:
-#     ^template-name  - Loads custom-columns template from:
+#     ^template-name  - Loads template from:
 #                       $KUBECTL_TEMPLATES_DIR or ~/.kube/templates/
+#                       Templates can be either:
+#                       - Custom-columns format: NAME:.metadata.name,...
+#                       - FLAGS format: FLAGS:-L label1 -L label2 ...
 #
 # JQ SYNTAX:
 #     .field          - Extracts JSON field using jq
@@ -66,8 +69,11 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
         echo "  kubectl-get pods -n kube-system ^scaleops-pod"
         echo ""
         echo "TEMPLATE SYNTAX:"
-        echo "  ^template-name  - Loads custom-columns template from:"
+        echo "  ^template-name  - Loads template from:"
         echo "                    \$KUBECTL_TEMPLATES_DIR or ~/.kube/templates/"
+        echo "                    Templates can be either:"
+        echo "                      - Custom-columns: NAME:.metadata.name,..."
+        echo "                      - FLAGS format: FLAGS:-L label1 -L label2 ..."
         echo ""
         echo "JQ SYNTAX:"
         echo "  .field          - Extracts JSON field using jq"
@@ -144,7 +150,16 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
         end
 
         set -l template_content (cat $template_path)
-        set kubectl_args $kubectl_args "--output=custom-columns=$template_content"
+
+        # Check if template uses FLAGS: format instead of custom-columns
+        if string match -qr '^FLAGS:' -- $template_content
+            # Extract flags after "FLAGS:" prefix and add to kubectl args
+            set -l flags (string replace 'FLAGS:' '' -- $template_content)
+            set kubectl_args $kubectl_args (string split ' ' -- $flags)
+        else
+            # Traditional custom-columns template
+            set kubectl_args $kubectl_args "--output=custom-columns=$template_content"
+        end
     end
 
     # Handle jq syntax (.field)
