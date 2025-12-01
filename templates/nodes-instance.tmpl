@@ -1,1 +1,1 @@
-NAME:.metadata.name,STATUS:.status.conditions[?(@.type=="Ready")].status,ROLES:.metadata.labels.node-role\.kubernetes\.io/.*,AGE:.metadata.creationTimestamp,VERSION:.status.nodeInfo.kubeletVersion,INSTANCE-GROUP:.metadata.labels.kops\.k8s\.io/instance-group,INSTANCE-TYPE:.metadata.labels.node\.kubernetes\.io/instance-type,PROVISIONER:.metadata.labels.karpenter\.sh/provisioner-name
+FLAGS:-L kops.k8s.io/instance-group -L node.kubernetes.io/instance-type -L karpenter.sh/provisioner-name --sort-by='.metadata.creationTimestamp'
