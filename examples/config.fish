@@ -51,6 +51,7 @@ alias kgpo='k get pods ^owners'                 # Pods with owner references
 
 # Node template aliases
 alias kgnt='k get nodes ^nodes'                 # Nodes with capacity
+alias kgni='k get nodes ^nodes-instance'        # Nodes with instance metadata
 alias kgnc='k get nodes ^cordoned'              # Show cordoned nodes
 alias kgntaint='k get nodes ^taints'            # Nodes with taints
 
