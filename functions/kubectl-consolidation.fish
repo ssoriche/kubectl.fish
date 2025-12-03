@@ -5,7 +5,7 @@
 # This function wraps 'kubectl get nodes' and augments the output with information about
 # why Karpenter cannot consolidate specific nodes. It preserves all kubectl get nodes
 # functionality while adding PROVISIONER, CAPACITY-TYPE, and CONSOLIDATION-BLOCKER columns
-# to the table output.
+# to the table output. Nodes are sorted by creation timestamp by default (oldest first).
 #
 # USAGE:
 #   kubectl consolidation [OPTIONS] [NODE...]
@@ -47,6 +47,8 @@ function kubectl-consolidation -d "Show nodes with Karpenter consolidation block
         echo "  Wraps 'kubectl get nodes' and augments the table output with PROVISIONER,"
         echo "  CAPACITY-TYPE, and CONSOLIDATION-BLOCKER columns showing Karpenter node"
         echo "  information and why specific nodes cannot be consolidated."
+        echo ""
+        echo "  Nodes are sorted by creation timestamp by default (oldest first)."
         echo ""
         echo "  The function detects consolidation blockers from multiple sources:"
         echo "    - Pod annotations (karpenter.sh/do-not-evict, do-not-disrupt, do-not-consolidate)"
@@ -237,6 +239,11 @@ function _kubectl_consolidation_show_nodes
         else
             echo "Warning: NodeClaim CRD not found, showing Node events only (Karpenter v0.32+ required)" >&2
         end
+    end
+
+    # Apply default sorting by creation timestamp if no --sort-by flag present
+    if not contains -- --sort-by $kubectl_flags
+        set kubectl_flags $kubectl_flags --sort-by='.metadata.creationTimestamp'
     end
 
     # Get node list - use string collect to preserve newlines
