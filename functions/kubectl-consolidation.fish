@@ -4,7 +4,8 @@
 #
 # This function wraps 'kubectl get nodes' and augments the output with information about
 # why Karpenter cannot consolidate specific nodes. It preserves all kubectl get nodes
-# functionality while adding a CONSOLIDATION-BLOCKER column to the table output.
+# functionality while adding PROVISIONER, CAPACITY-TYPE, and CONSOLIDATION-BLOCKER columns
+# to the table output.
 #
 # USAGE:
 #   kubectl consolidation [OPTIONS] [NODE...]
@@ -43,8 +44,9 @@ function kubectl-consolidation -d "Show nodes with Karpenter consolidation block
         echo "  kubectl consolidation --all [NODE...]"
         echo ""
         echo "DESCRIPTION:"
-        echo "  Wraps 'kubectl get nodes' and augments the table output with a CONSOLIDATION-BLOCKER"
-        echo "  column showing why Karpenter cannot consolidate specific nodes."
+        echo "  Wraps 'kubectl get nodes' and augments the table output with PROVISIONER,"
+        echo "  CAPACITY-TYPE, and CONSOLIDATION-BLOCKER columns showing Karpenter node"
+        echo "  information and why specific nodes cannot be consolidated."
         echo ""
         echo "  The function detects consolidation blockers from multiple sources:"
         echo "    - Pod annotations (karpenter.sh/do-not-evict, do-not-disrupt, do-not-consolidate)"
@@ -338,6 +340,10 @@ function _kubectl_consolidation_show_nodes
         wait $pods_job $events_job 2>/dev/null
     end
 
+    # Fetch node labels for provisioner and capacity type
+    set -l tmp_node_labels (mktemp)
+    kubectl get nodes $kubectl_flags -o json 2>/dev/null | jq -r '.items[] | [.metadata.name, (.metadata.labels["karpenter.sh/provisioner-name"] // "<none>"), (.metadata.labels["karpenter.sh/capacity-type"] // "<none>")] | @tsv' >$tmp_node_labels 2>/dev/null
+
     # OPTIMIZATION: Process ALL nodes in a single jq pass
     # Build a TSV mapping: node_name<TAB>blockers
     # COMPLEXITY: O(pods + events + nodes) using pre-grouped lookup tables
@@ -446,15 +452,19 @@ function _kubectl_consolidation_show_nodes
         end
     end
 
-    # Read results into array (single pass - O(n) instead of O(n²))
+    # Read results into arrays (single pass - O(n) instead of O(n²))
     set -l blocker_info (cut -f2 $tmp_results)
 
+    # Read node labels (provisioner and capacity type)
+    set -l provisioner_info (cut -f2 $tmp_node_labels)
+    set -l capacity_info (cut -f3 $tmp_node_labels)
+
     # Cleanup temp files
-    rm -f $tmp_pods $tmp_events $tmp_results
+    rm -f $tmp_pods $tmp_events $tmp_results $tmp_node_labels
 
     # Output the augmented table
     if test "$has_header" = true
-        echo "$header_line  CONSOLIDATION-BLOCKER"
+        echo "$header_line  PROVISIONER  CAPACITY-TYPE  CONSOLIDATION-BLOCKER"
     end
 
     # Print data lines with blocker information
@@ -464,14 +474,21 @@ function _kubectl_consolidation_show_nodes
             continue
         end
 
+        set -l provisioner ""
+        set -l capacity ""
         set -l blocker ""
+
         if test $node_index -le (count $blocker_info)
+            set provisioner $provisioner_info[$node_index]
+            set capacity $capacity_info[$node_index]
             set blocker $blocker_info[$node_index]
         else
+            set provisioner "<error>"
+            set capacity "<error>"
             set blocker "<error>"
         end
 
-        echo "$lines[$i]  $blocker"
+        echo "$lines[$i]  $provisioner  $capacity  $blocker"
         set node_index (math $node_index + 1)
     end
 
