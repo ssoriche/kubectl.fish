@@ -187,8 +187,17 @@ end
 function _kubectl_consolidation_show_pods
     set -l target_nodes $argv
 
-    # Print header
-    echo "NODE"(string repeat -n 42 " ")"POD"(string repeat -n 17 " ")"NAMESPACE    REASON"
+    # Check if column command is available for formatting
+    if not command -q column
+        echo "Error: 'column' command is required for --pods output but not found" >&2
+        return 1
+    end
+
+    # Create temp file for collecting output
+    set -l tmp_output (mktemp)
+
+    # Print header with actual tabs
+    printf "NODE\tNAMESPACE\tPOD\tAGE\tREASON\n" >$tmp_output
 
     # For each target node, find blocking pods
     for node_name in $target_nodes
@@ -200,28 +209,44 @@ function _kubectl_consolidation_show_pods
         end
 
         # Find blocking pods (only Karpenter disruption annotations)
+        # Output as TSV for proper column formatting with relative age
         echo "$pods_json" | jq -r --arg node "$node_name" '
+            # Function to format age as relative duration
+            def age_format:
+                . as $seconds |
+                if $seconds < 60 then ($seconds | floor | tostring) + "s"
+                elif $seconds < 3600 then (($seconds / 60) | floor | tostring) + "m"
+                elif $seconds < 86400 then (($seconds / 3600) | floor | tostring) + "h"
+                else (($seconds / 86400) | floor | tostring) + "d"
+                end;
+
             .items[] |
             select(
                 (.metadata.annotations["karpenter.sh/do-not-evict"] == "true") or
                 (.metadata.annotations["karpenter.sh/do-not-disrupt"] == "true") or
                 (.metadata.annotations["karpenter.sh/do-not-consolidate"] == "true")
             ) |
-            {
-                node: $node,
-                name: .metadata.name,
-                namespace: .metadata.namespace,
-                reason: (
+            [
+                $node,
+                .metadata.namespace,
+                .metadata.name,
+                ((now - (.metadata.creationTimestamp | fromdateiso8601)) | age_format),
+                (
                     if .metadata.annotations["karpenter.sh/do-not-evict"] == "true" then "do-not-evict"
                     elif .metadata.annotations["karpenter.sh/do-not-disrupt"] == "true" then "do-not-disrupt"
                     elif .metadata.annotations["karpenter.sh/do-not-consolidate"] == "true" then "do-not-consolidate"
                     else "unknown"
                     end
                 )
-            } |
-            "\(.node)  \(.name)  \(.namespace)  \(.reason)"
-        ' 2>/dev/null
+            ] | @tsv
+        ' 2>/dev/null >>$tmp_output
     end
+
+    # Format output with proper column alignment
+    column -t -s (printf '\t') $tmp_output
+
+    # Cleanup
+    rm -f $tmp_output
 
     return 0
 end
