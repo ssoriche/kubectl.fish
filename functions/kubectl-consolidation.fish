@@ -4,8 +4,9 @@
 #
 # This function wraps 'kubectl get nodes' and augments the output with information about
 # why Karpenter cannot consolidate specific nodes. It preserves all kubectl get nodes
-# functionality while adding PROVISIONER, CAPACITY-TYPE, and CONSOLIDATION-BLOCKER columns
-# to the table output. Nodes are sorted by creation timestamp by default (oldest first).
+# functionality while adding PROVISIONER, CAPACITY-TYPE, CPU-UTIL, MEM-UTIL, and
+# CONSOLIDATION-BLOCKER columns to the table output. Nodes are sorted by creation
+# timestamp by default (oldest first).
 #
 # USAGE:
 #   kubectl consolidation [OPTIONS] [NODE...]
@@ -45,8 +46,9 @@ function kubectl-consolidation -d "Show nodes with Karpenter consolidation block
         echo ""
         echo "DESCRIPTION:"
         echo "  Wraps 'kubectl get nodes' and augments the table output with PROVISIONER,"
-        echo "  CAPACITY-TYPE, and CONSOLIDATION-BLOCKER columns showing Karpenter node"
-        echo "  information and why specific nodes cannot be consolidated."
+        echo "  CAPACITY-TYPE, CPU-UTIL, MEM-UTIL, and CONSOLIDATION-BLOCKER columns"
+        echo "  showing Karpenter node information, resource utilization (based on pod"
+        echo "  requests), and why specific nodes cannot be consolidated."
         echo ""
         echo "  Nodes are sorted by creation timestamp by default (oldest first)."
         echo ""
@@ -86,6 +88,7 @@ function kubectl-consolidation -d "Show nodes with Karpenter consolidation block
         echo "  kubectl consolidation -o json"
         echo ""
         echo "BLOCKER TYPES:"
+        echo "  high-utilization      Node CPU or memory utilization >= 80%"
         echo "  do-not-evict          Pod has karpenter.sh/do-not-evict annotation"
         echo "  do-not-disrupt        Pod has karpenter.sh/do-not-disrupt annotation"
         echo "  do-not-consolidate    Node/Pod has do-not-consolidate annotation"
@@ -328,7 +331,7 @@ function _kubectl_consolidation_show_nodes
         fish -c "
             for node in $node_names
                 kubectl get pods --all-namespaces --field-selector \"spec.nodeName=\$node\" -o json 2>/dev/null
-            end | jq -s '{items: [.[].items[] | {spec: {nodeName: .spec.nodeName}, metadata: {namespace: .metadata.namespace, name: .metadata.name, annotations: .metadata.annotations}}]}' >$tmp_pods 2>/dev/null
+            end | jq -s '{items: [.[].items[] | {spec: {nodeName: .spec.nodeName, containers: [.spec.containers[]? | {resources: .resources}]}, metadata: {namespace: .metadata.namespace, name: .metadata.name, annotations: .metadata.annotations}}]}' >$tmp_pods 2>/dev/null
             if test \$status -ne 0
                 echo '{\"items\":[]}' >$tmp_pods
             end
@@ -352,7 +355,7 @@ function _kubectl_consolidation_show_nodes
         # For many nodes, fetch all pods and events in parallel
         # Fetch pods in background with reduced fields
         fish -c "
-            kubectl get pods --all-namespaces -o json 2>/dev/null | jq '{items: [.items[] | {spec: {nodeName: .spec.nodeName}, metadata: {namespace: .metadata.namespace, name: .metadata.name, annotations: .metadata.annotations}}]}' >$tmp_pods 2>&1
+            kubectl get pods --all-namespaces -o json 2>/dev/null | jq '{items: [.items[] | {spec: {nodeName: .spec.nodeName, containers: [.spec.containers[]? | {resources: .resources}]}, metadata: {namespace: .metadata.namespace, name: .metadata.name, annotations: .metadata.annotations}}]}' >$tmp_pods 2>&1
             if test \$status -ne 0
                 echo '{\"items\":[]}' >$tmp_pods
             end
@@ -372,9 +375,136 @@ function _kubectl_consolidation_show_nodes
         wait $pods_job $events_job 2>/dev/null
     end
 
-    # Fetch node labels for provisioner and capacity type
+    # Fetch node labels, provisioner, capacity type, and resource capacity
     set -l tmp_node_labels (mktemp)
-    kubectl get nodes $kubectl_flags -o json 2>/dev/null | jq -r '(if .items then .items else [.] end)[] | [.metadata.name, (.metadata.labels["karpenter.sh/provisioner-name"] // "<none>"), (.metadata.labels["karpenter.sh/capacity-type"] // "<none>")] | @tsv' >$tmp_node_labels 2>/dev/null
+    kubectl get nodes $kubectl_flags -o json 2>/dev/null | jq -r '
+        # Helper function to convert CPU to millicores
+        def cpu_to_millicores:
+            if type == "string" then
+                if endswith("m") then
+                    .[:-1] | tonumber
+                else
+                    (tonumber * 1000)
+                end
+            else
+                (tonumber * 1000)
+            end;
+
+        # Helper function to convert memory to bytes
+        def memory_to_bytes:
+            if type == "string" then
+                if endswith("Ki") then
+                    .[:-2] | tonumber | . * 1024
+                elif endswith("Mi") then
+                    .[:-2] | tonumber | . * 1024 * 1024
+                elif endswith("Gi") then
+                    .[:-2] | tonumber | . * 1024 * 1024 * 1024
+                elif endswith("Ti") then
+                    .[:-2] | tonumber | . * 1024 * 1024 * 1024 * 1024
+                elif endswith("K") then
+                    .[:-1] | tonumber | . * 1000
+                elif endswith("M") then
+                    .[:-1] | tonumber | . * 1000 * 1000
+                elif endswith("G") then
+                    .[:-1] | tonumber | . * 1000 * 1000 * 1000
+                elif endswith("T") then
+                    .[:-1] | tonumber | . * 1000 * 1000 * 1000 * 1000
+                else
+                    tonumber
+                end
+            else
+                tonumber
+            end;
+
+        (if .items then .items else [.] end)[] |
+        [
+            .metadata.name,
+            (.metadata.labels["karpenter.sh/provisioner-name"] // "<none>"),
+            (.metadata.labels["karpenter.sh/capacity-type"] // "<none>"),
+            ((.status.allocatable.cpu // "0") | cpu_to_millicores),
+            ((.status.allocatable.memory // "0") | memory_to_bytes)
+        ] | @tsv
+    ' >$tmp_node_labels 2>/dev/null
+
+    # Calculate resource utilization per node
+    set -l tmp_utilization (mktemp)
+    jq -r --slurpfile pods $tmp_pods --rawfile nodes_data $tmp_node_labels '
+        # Helper function to convert CPU to millicores
+        def cpu_to_millicores:
+            if type == "string" then
+                if . == "" or . == null then 0
+                elif endswith("m") then
+                    .[:-1] | tonumber
+                else
+                    (tonumber * 1000)
+                end
+            elif type == "number" then
+                (. * 1000)
+            else
+                0
+            end;
+
+        # Helper function to convert memory to bytes
+        def memory_to_bytes:
+            if type == "string" then
+                if . == "" or . == null then 0
+                elif endswith("Ki") then
+                    .[:-2] | tonumber | . * 1024
+                elif endswith("Mi") then
+                    .[:-2] | tonumber | . * 1024 * 1024
+                elif endswith("Gi") then
+                    .[:-2] | tonumber | . * 1024 * 1024 * 1024
+                elif endswith("Ti") then
+                    .[:-2] | tonumber | . * 1024 * 1024 * 1024 * 1024
+                else
+                    tonumber
+                end
+            elif type == "number" then
+                .
+            else
+                0
+            end;
+
+        # Parse node data TSV into lookup table
+        # Format: node_name<TAB>provisioner<TAB>capacity_type<TAB>cpu_millicores<TAB>memory_bytes
+        ($nodes_data | split("\n") | map(select(length > 0) | split("\t")) |
+            map({key: .[0], value: {cpu: (.[3] | tonumber), mem: (.[4] | tonumber)}}) |
+            from_entries) as $node_capacity |
+
+        # Group pods by node name
+        ($pods[0].items | group_by(.spec.nodeName // "") |
+            map({key: (.[0].spec.nodeName // ""), value: .}) |
+            from_entries) as $pods_by_node |
+
+        # For each node in the capacity data
+        $node_capacity | to_entries[] |
+        .key as $node_name |
+        .value as $capacity |
+
+        # Calculate total requests for this node
+        (($pods_by_node[$node_name] // []) |
+            map(.spec.containers[]? | .resources.requests // {}) |
+            {
+                cpu: (map(.cpu // "0" | cpu_to_millicores) | add // 0),
+                mem: (map(.memory // "0" | memory_to_bytes) | add // 0)
+            }
+        ) as $requests |
+
+        # Calculate utilization percentages
+        (if $capacity.cpu > 0 then (($requests.cpu / $capacity.cpu) * 100 | floor) else 0 end) as $cpu_util |
+        (if $capacity.mem > 0 then (($requests.mem / $capacity.mem) * 100 | floor) else 0 end) as $mem_util |
+
+        # Output: node_name<TAB>cpu_util%<TAB>mem_util%
+        [$node_name, ($cpu_util | tostring) + "%", ($mem_util | tostring) + "%"] | @tsv
+    ' -n >$tmp_utilization 2>/dev/null
+    set -l util_status $status
+
+    if test $util_status -ne 0; or not test -s $tmp_utilization
+        # Fallback: create empty utilization data
+        for node in $node_names
+            printf '%s\t-\t-\n' "$node" >>$tmp_utilization
+        end
+    end
 
     # OPTIMIZATION: Process ALL nodes in a single jq pass
     # Build a TSV mapping: node_name<TAB>blockers
@@ -390,10 +520,10 @@ function _kubectl_consolidation_show_nodes
     printf '%s\n' $node_names | jq -R . | jq -s . >$tmp_nodes
 
     # Single jq invocation to process all data at once
-    # Input: Three JSON files loaded via --slurpfile (pods, events, nodes)
+    # Input: Four data sources loaded via --slurpfile (pods, events, nodes, utilization)
     # Output: TSV lines of "node_name<TAB>blocker1,blocker2" or "node_name<TAB><none>"
     # OPTIMIZATION: Pre-group data by node name for O(pods + events + nodes) instead of O(nodes × (pods + events))
-    jq -r --slurpfile pods $tmp_pods --slurpfile events $tmp_events --slurpfile nodes $tmp_nodes '
+    jq -r --slurpfile pods $tmp_pods --slurpfile events $tmp_events --slurpfile nodes $tmp_nodes --rawfile util_data $tmp_utilization '
         # Define helper function to normalize event messages to short blocker codes
         # Used to convert verbose Karpenter event messages into standardized identifiers
         def normalize_blocker:
@@ -411,12 +541,17 @@ function _kubectl_consolidation_show_nodes
             else empty
             end;
 
-        # Build lookup indices once (O(pods + events) preprocessing)
+        # Build lookup indices once (O(pods + events + util) preprocessing)
         # Group pods by nodeName for fast lookup
         ($pods[0].items | group_by(.spec.nodeName // "") | map({key: (.[0].spec.nodeName // ""), value: .}) | from_entries) as $pods_by_node |
 
         # Group events by node name for fast lookup
         ($events[0].items | map(select(.involvedObject.kind == "Node")) | group_by(.involvedObject.name // "") | map({key: (.[0].involvedObject.name // ""), value: .}) | from_entries) as $events_by_node |
+
+        # Parse utilization data: node_name<TAB>cpu_util%<TAB>mem_util%
+        ($util_data | split("\n") | map(select(length > 0) | split("\t")) |
+            map({key: .[0], value: {cpu: (.[1] | rtrimstr("%") | tonumber? // 0), mem: (.[2] | rtrimstr("%") | tonumber? // 0)}}) |
+            from_entries) as $util_by_node |
 
         # Iterate over each node name from the input list (O(nodes) processing)
         $nodes[0][] as $node |
@@ -425,9 +560,13 @@ function _kubectl_consolidation_show_nodes
         # Format: "namespace/podname" to match event message format
         (($pods_by_node[$node] // []) | map((.metadata.namespace // "") + "/" + (.metadata.name // "")) | unique) as $existing_pods |
 
-        # Collect all consolidation blockers for this node from two sources:
+        # Collect all consolidation blockers for this node from three sources:
         (
-            # Source 1: Pod annotations (O(1) lookup + O(pods_on_node) scan)
+            # Source 1: High utilization check (prevents consolidation)
+            (($util_by_node[$node] // {cpu: 0, mem: 0}) |
+                if (.cpu >= 80 or .mem >= 80) then ["high-utilization"] else [] end) +
+
+            # Source 2: Pod annotations (O(1) lookup + O(pods_on_node) scan)
             # Check pods on this node for do-not-evict/disrupt/consolidate annotations
             ([($pods_by_node[$node] // [])[] |
                 if .metadata.annotations["karpenter.sh/do-not-evict"] == "true" then "do-not-evict"
@@ -437,7 +576,7 @@ function _kubectl_consolidation_show_nodes
                 end
             ] | unique) +
 
-            # Source 2: Node events (O(1) lookup + O(events_for_node) scan)
+            # Source 3: Node events (O(1) lookup + O(events_for_node) scan)
             # Extract and normalize blocker reasons from Karpenter events
             # IMPORTANT: Only include event-based blockers if the referenced pod still exists
             ([($events_by_node[$node] // [])[] |
@@ -491,12 +630,19 @@ function _kubectl_consolidation_show_nodes
     set -l provisioner_info (cut -f2 $tmp_node_labels)
     set -l capacity_info (cut -f3 $tmp_node_labels)
 
-    # Cleanup temp files
-    rm -f $tmp_pods $tmp_events $tmp_results $tmp_node_labels
+    # Read utilization data
+    set -l cpu_util_info (cut -f2 $tmp_utilization)
+    set -l mem_util_info (cut -f3 $tmp_utilization)
 
-    # Output the augmented table
+    # Cleanup temp files
+    rm -f $tmp_pods $tmp_events $tmp_results $tmp_node_labels $tmp_utilization
+
+    # Create temp file for formatted output
+    set -l tmp_output (mktemp)
+
+    # Build the augmented table
     if test "$has_header" = true
-        echo "$header_line  PROVISIONER  CAPACITY-TYPE  CONSOLIDATION-BLOCKER"
+        printf '%s\tPROVISIONER\tCAPACITY-TYPE\tCPU-UTIL\tMEM-UTIL\tCONSOLIDATION-BLOCKER\n' "$header_line" >$tmp_output
     end
 
     # Print data lines with blocker information
@@ -508,21 +654,38 @@ function _kubectl_consolidation_show_nodes
 
         set -l provisioner ""
         set -l capacity ""
+        set -l cpu_util ""
+        set -l mem_util ""
         set -l blocker ""
 
         if test $node_index -le (count $blocker_info)
             set provisioner $provisioner_info[$node_index]
             set capacity $capacity_info[$node_index]
+            set cpu_util $cpu_util_info[$node_index]
+            set mem_util $mem_util_info[$node_index]
             set blocker $blocker_info[$node_index]
         else
             set provisioner "<error>"
             set capacity "<error>"
+            set cpu_util "<error>"
+            set mem_util "<error>"
             set blocker "<error>"
         end
 
-        echo "$lines[$i]  $provisioner  $capacity  $blocker"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$lines[$i]" "$provisioner" "$capacity" "$cpu_util" "$mem_util" "$blocker" >>$tmp_output
         set node_index (math $node_index + 1)
     end
+
+    # Format output with proper column alignment
+    if command -q column
+        column -t -s (printf '\t') $tmp_output
+    else
+        # Fallback: just output without alignment
+        cat $tmp_output
+    end
+
+    # Cleanup
+    rm -f $tmp_output
 
     return 0
 end
