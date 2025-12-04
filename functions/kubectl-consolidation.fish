@@ -374,7 +374,7 @@ function _kubectl_consolidation_show_nodes
 
     # Fetch node labels for provisioner and capacity type
     set -l tmp_node_labels (mktemp)
-    kubectl get nodes $kubectl_flags -o json 2>/dev/null | jq -r '.items[] | [.metadata.name, (.metadata.labels["karpenter.sh/provisioner-name"] // "<none>"), (.metadata.labels["karpenter.sh/capacity-type"] // "<none>")] | @tsv' >$tmp_node_labels 2>/dev/null
+    kubectl get nodes $kubectl_flags -o json 2>/dev/null | jq -r '(if .items then .items else [.] end)[] | [.metadata.name, (.metadata.labels["karpenter.sh/provisioner-name"] // "<none>"), (.metadata.labels["karpenter.sh/capacity-type"] // "<none>")] | @tsv' >$tmp_node_labels 2>/dev/null
 
     # OPTIMIZATION: Process ALL nodes in a single jq pass
     # Build a TSV mapping: node_name<TAB>blockers
