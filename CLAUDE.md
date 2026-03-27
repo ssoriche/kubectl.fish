@@ -116,6 +116,17 @@ The `k` wrapper discovers kubectl-* functions by:
 2. If match found, calling that function with remaining arguments
 3. Otherwise, delegating to kubectl (or kubecolor if available)
 
+### Tab Completion
+
+Fish tab completions are provided in the `completions/` directory:
+
+- `completions/k.fish` — Template completion for `k get ^<TAB>`
+- `completions/kubectl-get.fish` — Template completion for `kubectl-get ^<TAB>`
+
+Completions use `__kubectl_complete_templates` to list available template names from the templates directory. They activate only when the current token starts with `^`.
+
+Installation via `make install` copies completions to `~/.config/fish/completions/`.
+
 ### Enhanced kubectl get Architecture
 
 The enhanced kubectl get system consists of several components working together:
