@@ -13,7 +13,7 @@
 #   - Mock utilities for unit tests
 
 # Test configuration
-set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-consolidation kubectl-get kt k __kubectl_find_template __kubectl_parse_get_args
+set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-consolidation kubectl-get kt k __kubectl_find_template __kubectl_parse_get_args __kubectl_complete_templates
 set -g test_results_passed 0
 set -g test_results_failed 0
 set -g test_results_skipped 0
@@ -635,6 +635,60 @@ function test_template_system
     echo
 end
 
+function test_complete_templates
+    echo "=== Testing Template Completion ==="
+
+    # Test with temp directory containing .tmpl files
+    set -l temp_dir (mktemp -d)
+    echo "NAME:.metadata.name" >$temp_dir/pods-wide.tmpl
+    echo "NAME:.metadata.name" >$temp_dir/nodes.tmpl
+    echo "NAME:.metadata.name" >$temp_dir/images.template
+
+    # Test that function lists template names without extensions
+    function test_complete_templates_lists_names
+        set -l temp_dir $argv[1]
+        set -l result (KUBECTL_TEMPLATES_DIR=$temp_dir __kubectl_complete_templates)
+        test (count $result) -eq 3
+    end
+    test_assert "lists template names from directory" "test_complete_templates_lists_names $temp_dir" 0
+
+    # Test that .tmpl extension is stripped
+    function test_complete_templates_strips_tmpl
+        set -l temp_dir $argv[1]
+        set -l result (KUBECTL_TEMPLATES_DIR=$temp_dir __kubectl_complete_templates)
+        contains pods-wide $result
+    end
+    test_assert "strips .tmpl extension" "test_complete_templates_strips_tmpl $temp_dir" 0
+
+    # Test that .template extension is stripped
+    function test_complete_templates_strips_template
+        set -l temp_dir $argv[1]
+        set -l result (KUBECTL_TEMPLATES_DIR=$temp_dir __kubectl_complete_templates)
+        contains images $result
+    end
+    test_assert "strips .template extension" "test_complete_templates_strips_template $temp_dir" 0
+
+    # Test empty directory returns nothing
+    set -l empty_dir (mktemp -d)
+    function test_complete_templates_empty_dir
+        set -l empty_dir $argv[1]
+        set -l result (KUBECTL_TEMPLATES_DIR=$empty_dir __kubectl_complete_templates)
+        test (count $result) -eq 0
+    end
+    test_assert "empty directory returns nothing" "test_complete_templates_empty_dir $empty_dir" 0
+
+    # Test nonexistent directory returns nothing
+    function test_complete_templates_nonexistent
+        set -l result (KUBECTL_TEMPLATES_DIR=/tmp/nonexistent-dir-12345 __kubectl_complete_templates)
+        test (count $result) -eq 0
+    end
+    test_assert "nonexistent directory returns nothing" test_complete_templates_nonexistent 0
+
+    # Cleanup
+    rm -rf $temp_dir $empty_dir
+    functions -e test_complete_templates_lists_names test_complete_templates_strips_tmpl test_complete_templates_strips_template test_complete_templates_empty_dir test_complete_templates_nonexistent
+end
+
 function run_all_tests
     echo "🧪 kubectl.fish Function Test Suite"
     echo "=================================="
@@ -653,6 +707,7 @@ function run_all_tests
     test_kt_functionality
     test_enhanced_k_wrapper
     test_template_system
+    test_complete_templates
 
     echo "=== Test Results Summary ==="
     echo "Passed:  $test_results_passed"
