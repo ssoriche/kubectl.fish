@@ -678,11 +678,14 @@ function test_complete_templates
     test_assert "empty directory returns nothing" "test_complete_templates_empty_dir $empty_dir" 0
 
     # Test nonexistent directory returns nothing
+    set -l missing_dir (mktemp -d)
+    rm -rf $missing_dir
     function test_complete_templates_nonexistent
-        set -l result (KUBECTL_TEMPLATES_DIR=/tmp/nonexistent-dir-12345 __kubectl_complete_templates)
+        set -l missing_dir $argv[1]
+        set -l result (KUBECTL_TEMPLATES_DIR=$missing_dir __kubectl_complete_templates)
         test (count $result) -eq 0
     end
-    test_assert "nonexistent directory returns nothing" test_complete_templates_nonexistent 0
+    test_assert "nonexistent directory returns nothing" "test_complete_templates_nonexistent $missing_dir" 0
 
     # Cleanup
     rm -rf $temp_dir $empty_dir

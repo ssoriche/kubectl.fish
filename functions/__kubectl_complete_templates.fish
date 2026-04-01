@@ -45,10 +45,15 @@ function __kubectl_complete_templates -d "List available kubectl template names 
         return 0
     end
 
-    # List template files and strip extensions
+    # List template files, strip extensions, and deduplicate
+    set -l names
     for file in $search_dir/*.tmpl $search_dir/*.template
         if test -f $file
-            basename $file | string replace -r '\.(tmpl|template)$' ''
+            set -a names (basename $file | string replace -r '\.(tmpl|template)$' '')
         end
     end
+    # Deduplicate in case both .tmpl and .template exist for same name
+    for name in $names
+        echo $name
+    end | sort -u
 end
