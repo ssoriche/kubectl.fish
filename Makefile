@@ -27,7 +27,9 @@ uninstall: check-fish ## Remove functions from fish functions directory
 	@echo "Uninstalling kubectl.fish functions..."
 	@rm -f ~/.config/fish/functions/kubectl-*.fish
 	@rm -f ~/.config/fish/functions/k.fish
-	@rm -f ~/.config/fish/functions/__kubectl_*.fish
+	@rm -f ~/.config/fish/functions/__kubectl_find_template.fish
+	@rm -f ~/.config/fish/functions/__kubectl_parse_get_args.fish
+	@rm -f ~/.config/fish/functions/__kubectl_complete_templates.fish
 	@rm -f ~/.config/fish/completions/k.fish
 	@rm -f ~/.config/fish/completions/kubectl-get.fish
 	@echo "✅ Functions uninstalled successfully!"
