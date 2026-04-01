@@ -8,4 +8,4 @@ function __kubectl_k_has_get
 end
 
 # Complete template names when current token starts with ^
-complete -c k -n __kubectl_k_has_get -a '(commandline -ct | string match -q "^*" && __kubectl_complete_templates)' -f
+complete -c k -n __kubectl_k_has_get -a '(commandline -ct | string match -q "^*" && __kubectl_complete_templates | string replace -r "^" "^")' -f
