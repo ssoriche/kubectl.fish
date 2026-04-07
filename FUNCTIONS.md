@@ -96,21 +96,6 @@ kt CONFIG               # Switch to CONFIG
 kt /path/to/config      # Use absolute path
 
 
-## kubectl-consolidation
-
-**File:** `functions/kubectl-consolidation.fish`
-
-```fish
-# Function: kubectl-consolidation
-# Location: functions/kubectl-consolidation.fish
-
-function kubectl-consolidation -d "Show nodes with Karpenter consolidation blocker information" --wraps 'kubectl get'
-
-```
-
-**Description:**
-No description available
-
 ## kubectl-dump
 
 **File:** `functions/kubectl-dump.fish`

@@ -16,7 +16,6 @@ kubectl.fish is a collection of kubectl plugins and functions written in Fish sh
 - **kubectl-list-events**: Enhanced event viewing sorted by timestamp (requires jq)
 - **kubectl-really-all**: List all namespaced resources across all namespaces
 - **kubectl-why-not-deleted**: Debug stuck resource deletions (requires jq)
-- **kubectl-consolidation**: Karpenter consolidation blocker analysis (requires jq)
 - **kubectl-dyff**: Semantic diff of Kubernetes manifests (requires dyff, yq)
 
 ### Helper Functions
