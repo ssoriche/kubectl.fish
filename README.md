@@ -16,7 +16,6 @@ A collection of kubectl plugins and functions written in fish shell, designed to
 - **Enhanced event viewing** with `kubectl-list-events` (sorted by timestamp)
 - **Comprehensive resource listing** with `kubectl-really-all` (all namespaced resources)
 - **Deletion analysis** with `kubectl-why-not-deleted` (debug stuck deletions)
-- **Karpenter consolidation insights** with `kubectl-consolidation` (view consolidation blockers)
 - **16 production-ready templates** imported from the zsh kubectl plugin
 - **Robust error handling** and prerequisite checking
 - **Comprehensive test suite** for reliability
@@ -90,7 +89,6 @@ k get pods .items[0].metadata.name  # Enhanced get with jq
 k gron pods                   # Uses kubectl-gron function
 k list-events                 # Uses kubectl-list-events function
 k really-all                  # Uses kubectl-really-all function
-k consolidation               # Uses kubectl-consolidation function
 ```
 
 ### `kubectl-get` - Enhanced kubectl get with templates and jq
@@ -343,80 +341,6 @@ kubectl-why-not-deleted pvc my-volume-claim
 kubectl-why-not-deleted namespace my-namespace
 ```
 
-### `kubectl-consolidation` - Karpenter consolidation blocker analysis
-
-Analyze why Karpenter cannot consolidate specific nodes by examining pod annotations, node events, and NodeClaim events.
-
-**Dependencies:** `jq`
-
-**Installation:**
-
-```bash
-# macOS
-brew install jq
-
-# Ubuntu/Debian
-sudo apt-get install jq
-```
-
-**Usage:**
-
-```bash
-kubectl-consolidation [OPTIONS] [NODE...]
-kubectl-consolidation --pods NODE [NODE...]
-kubectl-consolidation --nodeclaims [NODE...]
-```
-
-**Options:**
-
-- `--pods` - Show detailed pod-level blockers in column format (requires node names)
-- `--nodeclaims` - Include NodeClaim events (Karpenter v0.32+, checks CRD availability)
-- `--all` - Alias for `--nodeclaims`
-- `-o, --output` - Output format (json, yaml, etc.) - passes through to kubectl
-
-**Examples:**
-
-```bash
-# Show all nodes with consolidation information
-kubectl-consolidation
-
-# Show specific nodes
-kubectl-consolidation node-1 node-2
-
-# Filter nodes by label
-kubectl-consolidation -l node-type=spot
-
-# Include NodeClaim events (Karpenter v0.32+)
-kubectl-consolidation --nodeclaims
-
-# Show detailed pod blockers for a node
-kubectl-consolidation --pods node-1
-
-# Show pod blockers for multiple nodes
-kubectl-consolidation --pods node-1 node-2
-```
-
-**Blocker Types Detected:**
-
-- `do-not-evict` - Pod has karpenter.sh/do-not-evict annotation
-- `do-not-disrupt` - Pod has karpenter.sh/do-not-disrupt annotation
-- `do-not-consolidate` - Node/Pod has do-not-consolidate annotation
-- `pdb-violation` - PodDisruptionBudget prevents disruption
-- `local-storage` - Pod uses local storage (emptyDir)
-- `non-replicated` - Pod has no controller (standalone)
-- `would-increase-cost` - Consolidation would increase costs
-- `in-use-security-group` - Node security group in use
-- `on-demand-protection` - Would delete on-demand node
-
-**Output Example:**
-
-```
-NAME                  STATUS   ROLES   AGE     VERSION  CONSOLIDATION-BLOCKER
-node-1                Ready    node    5d      v1.28.0  <none>
-node-2                Ready    node    3d      v1.28.0  do-not-evict
-node-3                Ready    node    2d      v1.28.0  pdb-violation,local-storage
-```
-
 ## 🧪 Testing
 
 This project includes a comprehensive test suite to ensure reliability and proper error handling.
@@ -599,7 +523,7 @@ All pull requests are automatically tested using GitHub Actions and Forgejo CI/C
 ### Optional Requirements
 
 - gron or fastgron (for kubectl-gron)
-- jq (for kubectl-list-events, kubectl-why-not-deleted, kubectl-consolidation)
+- jq (for kubectl-list-events, kubectl-why-not-deleted)
 - kubecolor (for enhanced k wrapper)
 - column (usually pre-installed)
 - less (for paginated output)
