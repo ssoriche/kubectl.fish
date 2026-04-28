@@ -108,7 +108,7 @@ Credit: https://github.com/ripta/dotfiles/tree/master/zsh-custom/plugins/kube/te
 
 #### Node Management
 - `nodes.tmpl` - Node capacity and allocatable resources
-- `nodes-instance.tmpl` - Node instance metadata (instance-group, instance-type, provisioner)
+- `nodes-instance.tmpl` - Node instance metadata (instance-group, instance-type, nodepool)
 - `cordoned.tmpl` - Show cordoned nodes with timestamp
 - `taints.tmpl` - Display node taints
 
