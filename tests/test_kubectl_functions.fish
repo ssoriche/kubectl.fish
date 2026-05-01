@@ -13,7 +13,7 @@
 #   - Mock utilities for unit tests
 
 # Test configuration
-set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-get kt k __kubectl_find_template __kubectl_parse_get_args __kubectl_complete_templates
+set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-get kt k __kubectl_find_template __kubectl_parse_get_args __kubectl_complete_templates kubectl-secret
 set -g test_results_passed 0
 set -g test_results_failed 0
 set -g test_results_skipped 0
@@ -95,6 +95,11 @@ function test_help_functionality
     test_assert "kubectl-why-not-deleted help contains USAGE" "kubectl-why-not-deleted --help | grep -q 'USAGE:'" 0
     test_assert "kubectl-dyff help contains USAGE" "kubectl-dyff --help | grep -q 'USAGE:'" 0
     test_assert "k help contains AVAILABLE FUNCTIONS" "k --help | grep -q 'AVAILABLE KUBECTL.FISH FUNCTIONS:'" 0
+    test_assert "kubectl-secret --help" "kubectl-secret --help >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl-secret -h" "kubectl-secret -h >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl-secret help contains USAGE" "kubectl-secret --help | grep -q 'USAGE:'" 0
+    test_assert "kubectl-secret help contains EXAMPLES" "kubectl-secret --help | grep -q 'EXAMPLES:'" 0
+    test_assert "kubectl-secret help contains DEPENDENCIES" "kubectl-secret --help | grep -q 'DEPENDENCIES:'" 0
 end
 
 function test_prerequisite_checking
@@ -111,6 +116,7 @@ function test_prerequisite_checking
     test_assert "kubectl-why-not-deleted without kubectl command" "kubectl-why-not-deleted pod test" 1
     test_assert "kubectl-dyff without kubectl command" "kubectl-dyff test.yaml" 1
     test_assert "k without kubectl command" "k get pods" 1
+    test_assert "kubectl-secret without kubectl command" "kubectl-secret my-secret" 1
 
     # Restore PATH
     set -x PATH $original_path
@@ -247,6 +253,8 @@ function test_argument_validation
     end
 
     test_assert "k suggests --help" "k 2>&1 | grep -q 'k --help'" 0
+    test_assert "kubectl-secret with no arguments" kubectl-secret 1
+    test_assert "kubectl-secret suggests --help" "kubectl-secret 2>&1 | grep -q 'kubectl-secret --help'" 0
 end
 
 function test_consistency
@@ -258,6 +266,7 @@ function test_consistency
     test_assert "kubectl-why-not-deleted error format" "kubectl-why-not-deleted 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-dyff error format" "kubectl-dyff 2>&1 | grep -q '^Error:'" 0
     test_assert "k error format" "k 2>&1 | grep -q '^Error:'" 0
+    test_assert "kubectl-secret error format" "kubectl-secret 2>&1 | grep -q '^Error:'" 0
 
     # Test that all functions use consistent --wraps annotation (check function definition)
     test_assert "kubectl-gron has proper wraps" "functions kubectl-gron | grep -q 'kubectl'" 0
@@ -267,6 +276,7 @@ function test_consistency
     test_assert "kubectl-why-not-deleted has proper wraps" "functions kubectl-why-not-deleted | grep -q 'kubectl'" 0
     test_assert "kubectl-dyff has proper wraps" "functions kubectl-dyff | grep -q 'kubectl'" 0
     test_assert "k has proper wraps" "functions k | grep -q 'kubectl'" 0
+    test_assert "kubectl-secret has proper wraps" "functions kubectl-secret | grep -q 'kubectl'" 0
 end
 
 function test_argument_forwarding
@@ -634,6 +644,57 @@ function test_complete_templates
     functions -e test_complete_templates_lists_names test_complete_templates_strips_tmpl test_complete_templates_strips_template test_complete_templates_empty_dir test_complete_templates_nonexistent
 end
 
+function test_kubectl_secret_forwarding
+    echo "=== Testing kubectl-secret Argument Forwarding ==="
+
+    if not command -q kubectl
+        test_skip "kubectl-secret forwarding tests" "kubectl not available"
+        return
+    end
+
+    function test_kubectl_secret_list_mode
+        set -g temp_secret_list_file (mktemp)
+        function kubectl
+            echo "kubectl $argv" >$temp_secret_list_file
+        end
+
+        kubectl-secret my-secret -n test-namespace >/dev/null 2>&1
+        set -l captured (cat $temp_secret_list_file)
+
+        functions -e kubectl
+        rm -f $temp_secret_list_file
+
+        string match -q '*get secret my-secret*' $captured
+        and string match -q '*test-namespace*' $captured
+        and string match -q '*go-template*' $captured
+        and string match -q '*range*' $captured
+    end
+
+    test_assert "kubectl-secret list mode builds correct kubectl command" test_kubectl_secret_list_mode 0
+
+    function test_kubectl_secret_decode_mode
+        set -g temp_secret_decode_file (mktemp)
+        function kubectl
+            echo "kubectl $argv" >$temp_secret_decode_file
+        end
+
+        kubectl-secret my-secret password -n test-namespace >/dev/null 2>&1
+        set -l captured (cat $temp_secret_decode_file)
+
+        functions -e kubectl
+        rm -f $temp_secret_decode_file
+
+        string match -q '*get secret my-secret*' $captured
+        and string match -q '*test-namespace*' $captured
+        and string match -q '*base64decode*' $captured
+        and string match -q '*password*' $captured
+    end
+
+    test_assert "kubectl-secret decode mode builds correct kubectl command" test_kubectl_secret_decode_mode 0
+
+    functions -e test_kubectl_secret_list_mode test_kubectl_secret_decode_mode
+end
+
 function run_all_tests
     echo "🧪 kubectl.fish Function Test Suite"
     echo "=================================="
@@ -645,6 +706,7 @@ function run_all_tests
     test_argument_validation
     test_consistency
     test_argument_forwarding
+    test_kubectl_secret_forwarding
     test_function_registration
     test_integration_basic
     test_linting_standards
