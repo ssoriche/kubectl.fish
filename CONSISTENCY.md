@@ -115,6 +115,13 @@ Every function implements:
 - **Dependencies**: Only kubectl required
 - **Wraps**: `kubectl get`
 
+### kubectl-secret
+
+- **Purpose**: Secret key listing and value decoding
+- **Pattern**: `kubectl get secret $name [flags] -o go-template='...'`
+- **Dependencies**: Only kubectl required
+- **Wraps**: `kubectl get secret`
+
 ### k (Smart Wrapper)
 
 - **Purpose**: Plugin dispatch and enhanced kubectl

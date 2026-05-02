@@ -17,6 +17,7 @@ kubectl.fish is a collection of kubectl plugins and functions written in Fish sh
 - **kubectl-really-all**: List all namespaced resources across all namespaces
 - **kubectl-why-not-deleted**: Debug stuck resource deletions (requires jq)
 - **kubectl-dyff**: Semantic diff of Kubernetes manifests (requires dyff, yq)
+- **kubectl-secret**: List secret keys or decode a specific key value to stdout
 
 ### Helper Functions
 
