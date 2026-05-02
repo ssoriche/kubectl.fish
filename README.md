@@ -16,6 +16,7 @@ A collection of kubectl plugins and functions written in fish shell, designed to
 - **Enhanced event viewing** with `kubectl-list-events` (sorted by timestamp)
 - **Comprehensive resource listing** with `kubectl-really-all` (all namespaced resources)
 - **Deletion analysis** with `kubectl-why-not-deleted` (debug stuck deletions)
+- **Secret inspection** with `kubectl-secret` (list keys and decode values)
 - **16 production-ready templates** imported from the zsh kubectl plugin
 - **Robust error handling** and prerequisite checking
 - **Comprehensive test suite** for reliability
@@ -89,6 +90,7 @@ k get pods .items[0].metadata.name  # Enhanced get with jq
 k gron pods                   # Uses kubectl-gron function
 k list-events                 # Uses kubectl-list-events function
 k really-all                  # Uses kubectl-really-all function
+k secret my-db-creds               # Uses kubectl-secret function
 ```
 
 ### `kubectl-get` - Enhanced kubectl get with templates and jq
@@ -339,6 +341,40 @@ kubectl-why-not-deleted deployment my-app -n production
 kubectl-why-not-deleted Pod/my-pod-name -n production
 kubectl-why-not-deleted pvc my-volume-claim
 kubectl-why-not-deleted namespace my-namespace
+```
+
+### `kubectl-secret` - Secret key listing and value decoding
+
+View keys or decode values from Kubernetes secrets without leaving the terminal.
+
+**Modes:**
+
+```fish
+kubectl-secret <secret> [-n namespace]        # List all keys in secret
+kubectl-secret <secret> <key> [-n namespace]  # Decode key value to stdout
+```
+
+**Examples:**
+
+```fish
+# List all keys in a secret
+kubectl-secret my-db-creds -n production
+
+# Decode a specific key
+kubectl-secret my-db-creds password -n production
+
+# Copy decoded value to clipboard (macOS)
+kubectl-secret my-db-creds password -n production | pbcopy
+
+# Copy decoded value to clipboard (Linux)
+kubectl-secret my-db-creds password -n production | xclip
+```
+
+**Access via `k`:**
+
+```fish
+k secret my-db-creds -n production
+k secret my-db-creds password -n production | pbcopy
 ```
 
 ## 🧪 Testing
