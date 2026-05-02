@@ -69,7 +69,7 @@ function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl
     set -l i 1
     while test $i -le (count $argv)
         switch $argv[$i]
-            case -n --namespace --context --cluster --kubeconfig
+            case -n --namespace -o --output --context --cluster --kubeconfig
                 if test (math $i + 1) -le (count $argv)
                     set kubectl_flags $kubectl_flags $argv[$i] $argv[(math $i + 1)]
                     set i (math $i + 2)
