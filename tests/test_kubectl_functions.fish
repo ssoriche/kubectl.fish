@@ -255,6 +255,8 @@ function test_argument_validation
     test_assert "k suggests --help" "k 2>&1 | grep -q 'k --help'" 0
     test_assert "kubectl-secret with no arguments" kubectl-secret 1
     test_assert "kubectl-secret suggests --help" "kubectl-secret 2>&1 | grep -q 'kubectl-secret --help'" 0
+    test_assert "kubectl-secret with too many arguments" "kubectl-secret a b c 2>&1; test \$status -eq 1" 0
+    test_assert "kubectl-secret too many args error format" "kubectl-secret a b c 2>&1 | grep -q '^Error:'" 0
 end
 
 function test_consistency
