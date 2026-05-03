@@ -69,7 +69,11 @@ function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl
     set -l i 1
     while test $i -le (count $argv)
         switch $argv[$i]
-            case -n --namespace -o --output --context --cluster --kubeconfig
+            case -o --output
+                echo "Error: -o/--output is not supported; output format is managed internally" >&2
+                echo "Use 'kubectl-secret --help' for more information" >&2
+                return 1
+            case -n --namespace --context --cluster --kubeconfig
                 if test (math $i + 1) -le (count $argv)
                     set kubectl_flags $kubectl_flags $argv[$i] $argv[(math $i + 1)]
                     set i (math $i + 2)
@@ -106,6 +110,10 @@ function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl
     if test (count $positional_args) -ge 2
         # Decode mode: print base64-decoded value for the given key
         set -l key $positional_args[2]
+        if not string match -qr '^[-._a-zA-Z0-9]+$' -- $key
+            echo "Error: invalid key name '$key'; keys must match [-._a-zA-Z0-9]+" >&2
+            return 1
+        end
         kubectl get secret $secret_name $kubectl_flags -o go-template="{{index .data \"$key\" | base64decode}}{{\"\\n\"}}"
     else
         # List mode: print all keys in the secret
