@@ -24,8 +24,17 @@
 #     kubectl.fish collection
 
 function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl get secret'
-    # Handle help option first
-    if contains -- --help $argv; or contains -- -h $argv
+    argparse --ignore-unknown \
+        h/help \
+        o/output= \
+        n/namespace= \
+        context= \
+        cluster= \
+        kubeconfig= \
+        -- $argv
+    or return 1
+
+    if set -q _flag_help
         echo "kubectl-secret - View and decode Kubernetes secrets"
         echo ""
         echo "USAGE:"
@@ -48,57 +57,35 @@ function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl
         return 0
     end
 
-    # Validate prerequisites
+    if set -q _flag_output
+        echo "Error: -o/--output is not supported; output format is managed internally" >&2
+        echo "Use 'kubectl-secret --help' for more information" >&2
+        return 1
+    end
+
     if not command -q kubectl
         echo "Error: kubectl is not installed or not in PATH" >&2
         echo "Please install kubectl to use this function" >&2
         return 1
     end
 
-    # Validate at least one argument provided
-    if test (count $argv) -eq 0
+    # $argv now contains only positionals and any undeclared flags (passed with = form)
+    set -l positional_args
+    set -l extra_flags
+    for arg in $argv
+        if string match -q -- '-*' $arg
+            set extra_flags $extra_flags $arg
+        else
+            set positional_args $positional_args $arg
+        end
+    end
+
+    if test (count $positional_args) -eq 0
         echo "Error: No arguments provided" >&2
         echo "Usage: kubectl-secret <secret> [key] [kubectl-flags...]" >&2
         echo "Use 'kubectl-secret --help' for more information" >&2
         return 1
     end
-
-    # Parse arguments: separate positional args from kubectl flags
-    set -l positional_args
-    set -l kubectl_flags
-    set -l i 1
-    while test $i -le (count $argv)
-        switch $argv[$i]
-            case -o --output
-                echo "Error: -o/--output is not supported; output format is managed internally" >&2
-                echo "Use 'kubectl-secret --help' for more information" >&2
-                return 1
-            case -n --namespace --context --cluster --kubeconfig
-                if test (math $i + 1) -le (count $argv)
-                    set kubectl_flags $kubectl_flags $argv[$i] $argv[(math $i + 1)]
-                    set i (math $i + 2)
-                else
-                    echo "Error: $argv[$i] requires a value" >&2
-                    return 1
-                end
-            case '-*'
-                set kubectl_flags $kubectl_flags $argv[$i]
-                set i (math $i + 1)
-            case '*'
-                set positional_args $positional_args $argv[$i]
-                set i (math $i + 1)
-        end
-    end
-
-    # Require secret name
-    if test (count $positional_args) -eq 0
-        echo "Error: Secret name is required" >&2
-        echo "Usage: kubectl-secret <secret> [key] [kubectl-flags...]" >&2
-        echo "Use 'kubectl-secret --help' for more information" >&2
-        return 1
-    end
-
-    set -l secret_name $positional_args[1]
 
     if test (count $positional_args) -gt 2
         echo "Error: Too many arguments provided" >&2
@@ -107,8 +94,15 @@ function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl
         return 1
     end
 
+    set -l kubectl_flags $extra_flags
+    set -q _flag_namespace; and set kubectl_flags $kubectl_flags -n $_flag_namespace
+    set -q _flag_context; and set kubectl_flags $kubectl_flags --context $_flag_context
+    set -q _flag_cluster; and set kubectl_flags $kubectl_flags --cluster $_flag_cluster
+    set -q _flag_kubeconfig; and set kubectl_flags $kubectl_flags --kubeconfig $_flag_kubeconfig
+
+    set -l secret_name $positional_args[1]
+
     if test (count $positional_args) -ge 2
-        # Decode mode: print base64-decoded value for the given key
         set -l key $positional_args[2]
         if not string match -qr '^[-._a-zA-Z0-9]+$' -- $key
             echo "Error: invalid key name '$key'; keys must match [-._a-zA-Z0-9]+" >&2
@@ -116,7 +110,6 @@ function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl
         end
         kubectl get secret $secret_name $kubectl_flags -o go-template="{{index .data \"$key\" | base64decode}}{{\"\\n\"}}"
     else
-        # List mode: print all keys in the secret
         kubectl get secret $secret_name $kubectl_flags -o go-template='{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}'
     end
 end
