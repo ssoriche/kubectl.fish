@@ -191,7 +191,7 @@ function kubectl-dyff -d "Semantic diff of Kubernetes manifests using dyff" --wr
 
     # Get the live resource from cluster
     set -l live_resource_file (mktemp)
-    if not kubectl $kubectl_args >$live_resource_file 2>/dev/null
+    if not command kubectl $kubectl_args >$live_resource_file 2>/dev/null
         echo "Error: Could not retrieve $kind/$name from cluster" >&2
         if test "$namespace" != null -a -n "$namespace"
             echo "Namespace: $namespace" >&2
