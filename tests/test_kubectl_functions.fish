@@ -289,23 +289,23 @@ function test_argument_forwarding
         return
     end
 
-    # Test kubectl-list-events argument forwarding by creating a mock kubectl function
+    # Test kubectl-list-events argument forwarding using a PATH shim
     function test_kubectl_list_events_forwarding
-        # Create a mock kubectl function that captures arguments
-        set -g temp_list_events_file (mktemp)
-        function kubectl
-            echo "kubectl $argv" >$temp_list_events_file
-            # Return empty JSON to avoid jq errors
-            echo '{"items": []}'
-        end
+        set -l temp_dir (mktemp -d)
+        set -l captured $temp_dir/captured_args
 
-        # Test that namespace argument is forwarded
+        echo '#!/bin/sh' >$temp_dir/kubectl
+        echo "echo \"kubectl \$@\" >$captured" >>$temp_dir/kubectl
+        echo 'echo "{\"items\": []}"' >>$temp_dir/kubectl
+        chmod +x $temp_dir/kubectl
+
+        set -l original_path $PATH
+        set -x PATH $temp_dir $original_path
         kubectl-list-events --namespace test-namespace >/dev/null 2>&1
-        set -l captured_command (cat $temp_list_events_file)
+        set -x PATH $original_path
 
-        # Clean up
-        functions -e kubectl
-        rm -f $temp_list_events_file
+        set -l captured_command (cat $captured)
+        rm -rf $temp_dir
 
         # Check if the namespace argument was forwarded
         echo $captured_command | grep -q "kubectl get events --namespace test-namespace -o json"
@@ -317,19 +317,23 @@ function test_argument_forwarding
         test_skip "kubectl-list-events argument forwarding" "jq not available"
     end
 
-    # Test kubectl-gron argument forwarding
+    # Test kubectl-gron argument forwarding using a PATH shim
     function test_kubectl_gron_forwarding
-        set -g temp_gron_file (mktemp)
-        function kubectl
-            echo "kubectl $argv" >$temp_gron_file
-            echo '{"items": []}'
-        end
+        set -l temp_dir (mktemp -d)
+        set -l captured $temp_dir/captured_args
 
+        echo '#!/bin/sh' >$temp_dir/kubectl
+        echo "echo \"kubectl \$@\" >$captured" >>$temp_dir/kubectl
+        echo 'echo "{\"items\": []}"' >>$temp_dir/kubectl
+        chmod +x $temp_dir/kubectl
+
+        set -l original_path $PATH
+        set -x PATH $temp_dir $original_path
         kubectl-gron pods --namespace test-namespace >/dev/null 2>&1
-        set -l captured_command (cat $temp_gron_file)
+        set -x PATH $original_path
 
-        functions -e kubectl
-        rm -f $temp_gron_file
+        set -l captured_command (cat $captured)
+        rm -rf $temp_dir
 
         echo $captured_command | grep -q "kubectl get pods --namespace test-namespace -o json"
     end
@@ -340,19 +344,23 @@ function test_argument_forwarding
         test_skip "kubectl-gron argument forwarding" "gron/fastgron not available"
     end
 
-    # Test kubectl-dump argument forwarding
+    # Test kubectl-dump argument forwarding using a PATH shim
     function test_kubectl_dump_forwarding
-        set -g temp_dump_file (mktemp)
-        function kubectl
-            echo "kubectl $argv" >$temp_dump_file
-            echo '{"items": []}'
-        end
+        set -l temp_dir (mktemp -d)
+        set -l captured $temp_dir/captured_args
 
+        echo '#!/bin/sh' >$temp_dir/kubectl
+        echo "echo \"kubectl \$@\" >$captured" >>$temp_dir/kubectl
+        echo 'echo "{\"items\": []}"' >>$temp_dir/kubectl
+        chmod +x $temp_dir/kubectl
+
+        set -l original_path $PATH
+        set -x PATH $temp_dir $original_path
         kubectl-dump pods --namespace test-namespace >/dev/null 2>&1
-        set -l captured_command (cat $temp_dump_file)
+        set -x PATH $original_path
 
-        functions -e kubectl
-        rm -f $temp_dump_file
+        set -l captured_command (cat $captured)
+        rm -rf $temp_dir
 
         echo $captured_command | grep -q "kubectl get pods --namespace test-namespace"
     end
@@ -655,16 +663,20 @@ function test_kubectl_secret_forwarding
     end
 
     function test_kubectl_secret_list_mode
-        set -g temp_secret_list_file (mktemp)
-        function kubectl
-            echo "kubectl $argv" >$temp_secret_list_file
-        end
+        set -l temp_dir (mktemp -d)
+        set -l captured $temp_dir/captured_args
 
+        echo '#!/bin/sh' >$temp_dir/kubectl
+        echo "echo \"kubectl \$@\" >$captured" >>$temp_dir/kubectl
+        chmod +x $temp_dir/kubectl
+
+        set -l original_path $PATH
+        set -x PATH $temp_dir $original_path
         kubectl-secret my-secret -n test-namespace >/dev/null 2>&1
-        set -l captured (cat $temp_secret_list_file)
+        set -x PATH $original_path
 
-        functions -e kubectl
-        rm -f $temp_secret_list_file
+        set -l captured (cat $captured)
+        rm -rf $temp_dir
 
         string match -q '*get secret my-secret*' $captured
         and string match -q '*test-namespace*' $captured
@@ -675,16 +687,20 @@ function test_kubectl_secret_forwarding
     test_assert "kubectl-secret list mode builds correct kubectl command" test_kubectl_secret_list_mode 0
 
     function test_kubectl_secret_decode_mode
-        set -g temp_secret_decode_file (mktemp)
-        function kubectl
-            echo "kubectl $argv" >$temp_secret_decode_file
-        end
+        set -l temp_dir (mktemp -d)
+        set -l captured $temp_dir/captured_args
 
+        echo '#!/bin/sh' >$temp_dir/kubectl
+        echo "echo \"kubectl \$@\" >$captured" >>$temp_dir/kubectl
+        chmod +x $temp_dir/kubectl
+
+        set -l original_path $PATH
+        set -x PATH $temp_dir $original_path
         kubectl-secret my-secret password -n test-namespace >/dev/null 2>&1
-        set -l captured (cat $temp_secret_decode_file)
+        set -x PATH $original_path
 
-        functions -e kubectl
-        rm -f $temp_secret_decode_file
+        set -l captured (cat $captured)
+        rm -rf $temp_dir
 
         string match -q '*get secret my-secret*' $captured
         and string match -q '*test-namespace*' $captured
