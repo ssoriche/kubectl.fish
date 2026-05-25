@@ -284,6 +284,9 @@ function test_consistency
 
     # Test abbreviation registration
     test_assert "k is registered as abbreviation" "abbr -q k" 0
+    # Erase any autoloaded k function (e.g. leftover ~/.config/fish/functions/k.fish
+    # from a prior install) so we test the repo state, not the user's environment.
+    functions -e k 2>/dev/null
     test_assert "k is not a function" "not functions -q k" 0
 end
 
