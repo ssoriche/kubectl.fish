@@ -179,8 +179,10 @@ jobs:
           tar xzf gron-linux-amd64-0.6.1.tgz
           mv gron /usr/local/bin/
 
-      - name: Check Fish version
-        run: fish --version
+      - name: Check Fish version (require >= 4.0)
+        run: |
+          fish --version
+          fish --version | awk '{print $3}' | awk -F. '{ if ($1 < 4) { print "Fish < 4.0 detected; this project requires Fish 4.0+"; exit 1 } }'
 
       - name: Install functions
         run: |

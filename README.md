@@ -38,11 +38,16 @@ git clone https://github.com/ssoriche/kubectl.fish.git
 cd kubectl.fish
 ```
 
-2. Copy functions to your fish functions directory:
+2. Copy functions, completions, and conf.d snippets:
 
 ```bash
+mkdir -p ~/.config/fish/functions ~/.config/fish/completions ~/.config/fish/conf.d
 cp functions/*.fish ~/.config/fish/functions/
+cp completions/*.fish ~/.config/fish/completions/
+cp conf.d/*.fish ~/.config/fish/conf.d/
 ```
+
+The `conf.d/k_abbr.fish` snippet registers `k` as a fish abbreviation expanding to `kubectl`; without it the `k` shortcut won't work.
 
 3. Reload fish configuration:
 
