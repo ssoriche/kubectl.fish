@@ -1,5 +1,29 @@
 # Function Documentation
 
+## __kubectl_complete_templates
+
+**File:** `functions/__kubectl_complete_templates.fish`
+
+```fish
+# Function: __kubectl_complete_templates
+# Location: functions/__kubectl_complete_templates.fish
+
+function __kubectl_complete_templates -d "List available kubectl template names for completion"
+
+```
+
+**Description:**
+Internal helper function for Fish tab completion. Lists available
+template names from the configured templates directory, stripping
+file extensions. Used by completion files for k and kubectl-get.
+
+USAGE:
+__kubectl_complete_templates
+
+SEARCH ORDER:
+1. $KUBECTL_TEMPLATES_DIR (if set)
+2. ~/.kube/templates/
+
 ## __kubectl_find_template
 
 **File:** `functions/__kubectl_find_template.fish`
@@ -47,30 +71,6 @@ __kubectl_parse_get_args ARGS...
 DETECTS:
 - ^template-name: Template syntax for custom-columns
 - .field: jq expression syntax (excluding ./paths)
-
-## k
-
-**File:** `functions/k.fish`
-
-```fish
-# Function: k
-# Location: functions/k.fish
-
-function k -d "Smart kubectl wrapper with plugin support" --wraps kubectl
-
-```
-
-**Description:**
-This function provides a smart wrapper around kubectl that automatically
-detects and uses kubecolor for colorized output when available. It also
-provides access to kubectl-* functions in this collection by using the
-first argument as a potential function name.
-
-USAGE:
-k [kubectl-function-name] [args...]
-k [kubectl-command] [args...]
-
-EXAMPLES:
 
 ## kt
 
@@ -240,6 +240,30 @@ kubectl-really-all [kubectl-get-options...]
 EXAMPLES:
 kubectl-really-all
 
+## kubectl-secret
+
+**File:** `functions/kubectl-secret.fish`
+
+```fish
+# Function: kubectl-secret
+# Location: functions/kubectl-secret.fish
+
+function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl get secret'
+
+```
+
+**Description:**
+View keys or decode values from Kubernetes secrets.
+With only a secret name, lists all available keys.
+With a secret name and key, prints the base64-decoded value to stdout.
+
+USAGE:
+kubectl-secret <secret> [-n namespace] [kubectl-flags...]
+kubectl-secret <secret> <key> [-n namespace] [kubectl-flags...]
+
+EXAMPLES:
+kubectl-secret my-db-creds
+
 ## kubectl-why-not-deleted
 
 **File:** `functions/kubectl-why-not-deleted.fish`
@@ -263,4 +287,19 @@ kubectl-why-not-deleted RESOURCE NAME [-n NAMESPACE]
 kubectl-why-not-deleted RESOURCE/NAME [-n NAMESPACE]
 kubectl-why-not-deleted [-n NAMESPACE] RESOURCE NAME
 
+
+## kubectl
+
+**File:** `functions/kubectl.fish`
+
+```fish
+# Function: kubectl
+# Location: functions/kubectl.fish
+
+function kubectl -d "Smart kubectl wrapper with plugin support"
+
+```
+
+**Description:**
+No description available
 
