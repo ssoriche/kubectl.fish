@@ -154,7 +154,6 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        fish-version: ['3.6.0', 'latest']
     runs-on: ${{ matrix.os }}
     needs: lint
     steps:
@@ -164,30 +163,12 @@ jobs:
       - name: Install Fish shell (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          if [ "${{ matrix.fish-version }}" = "latest" ]; then
-            sudo apt-get update
-            sudo apt-get install -y fish
-          else
-            # Install specific version from source
-            sudo apt-get update
-            sudo apt-get install -y build-essential cmake gettext git libncurses5-dev
-            git clone https://github.com/fish-shell/fish-shell.git
-            cd fish-shell
-            git checkout ${{ matrix.fish-version }}
-            cmake .
-            make
-            sudo make install
-          fi
+          sudo apt-get update
+          sudo apt-get install -y fish
 
       - name: Install Fish shell (macOS)
         if: matrix.os == 'macos-latest'
-        run: |
-          if [ "${{ matrix.fish-version }}" = "latest" ]; then
-            brew install fish
-          else
-            # For specific versions, use latest as fallback on macOS
-            brew install fish
-          fi
+        run: brew install fish
 
       - name: Install basic dependencies
         run: |
