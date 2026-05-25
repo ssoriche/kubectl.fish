@@ -551,10 +551,9 @@ function test_enhanced_k_wrapper
         test_assert "kubectl-get in kubectl --help output" "kubectl --help | grep -q 'get'" 0
     end
 
-    # Test kt is listed in available functions
-    if functions -q kt
-        test_assert "kt in kubectl --help output" "kubectl --help | grep -q 'Functions:' || kubectl --help" 0
-    end
+    # Note: kt is a standalone function (kubeconfig switcher), not a kubectl-*
+    # plugin, so it is intentionally NOT listed in the dispatcher's help output.
+    # kt existence is verified via check_prerequisites instead.
 end
 
 function test_template_system
