@@ -9,7 +9,7 @@ A collection of kubectl plugins and functions written in fish shell, designed to
 
 ## 🚀 Features
 
-- **Smart kubectl wrapper** (`k`) with plugin support and colorized output
+- **Smart kubectl wrapper** (`k` abbreviation expanding to `kubectl`) with plugin dispatch and enhanced `get`
 - **Enhanced kubectl get** with template system, jq integration, and smart sorting
 - **Kubeconfig switching** with `kt` for quick context changes
 - **Resource dumping** with `kubectl-gron` (flatten JSON) and `kubectl-dump` (YAML output)
@@ -66,11 +66,10 @@ omf install https://github.com/ssoriche/kubectl.fish
 
 ### `k` - Smart kubectl wrapper
 
-A smart wrapper around kubectl that provides plugin support and enhanced output.
+`k` is registered as a fish abbreviation that expands to `kubectl`. The wrapping logic lives in the `kubectl` function — so `k get pods`, `kubectl get pods`, and `kubectl get pods ^pods-wide` all flow through the same dispatcher.
 
 **Features:**
 
-- Automatically uses `kubecolor` for colorized output when available
 - Provides access to all `kubectl-*` functions in this collection
 - Falls back to standard kubectl when no plugin matches
 
@@ -481,18 +480,6 @@ This collection follows fish shell best practices and maintains strict consisten
 
 For enhanced functionality, consider installing these optional tools:
 
-- **kubecolor**: Colorized kubectl output
-
-  ```bash
-  # macOS
-  brew install kubecolor
-
-  # Ubuntu/Debian
-  wget https://github.com/hidetatz/kubecolor/releases/download/v0.0.25/kubecolor_0.0.25_Linux_x86_64.tar.gz
-  tar xzf kubecolor_0.0.25_Linux_x86_64.tar.gz
-  sudo mv kubecolor /usr/local/bin/
-  ```
-
 - **less**: For paginated output (usually pre-installed)
 
 ### Fish Shell Configuration
@@ -560,7 +547,6 @@ All pull requests are automatically tested using GitHub Actions and Forgejo CI/C
 
 - gron or fastgron (for kubectl-gron)
 - jq (for kubectl-list-events, kubectl-why-not-deleted)
-- kubecolor (for enhanced k wrapper)
 - column (usually pre-installed)
 - less (for paginated output)
 
@@ -574,7 +560,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Fish shell](https://fishshell.com/) - The friendly interactive shell
 - [gron](https://github.com/tomnomnom/gron) - Make JSON greppable
 - [jq](https://stedolan.github.io/jq/) - Command-line JSON processor
-- [kubecolor](https://github.com/hidetatz/kubecolor) - Colorized kubectl output
 
 ## 🔗 Related Projects
 

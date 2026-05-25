@@ -122,12 +122,12 @@ Every function implements:
 - **Dependencies**: Only kubectl required
 - **Wraps**: `kubectl get secret`
 
-### k (Smart Wrapper)
+### kubectl (Smart Wrapper) + k (Abbreviation)
 
-- **Purpose**: Plugin dispatch and enhanced kubectl
-- **Pattern**: Function detection → plugin execution or kubectl delegation
-- **Dependencies**: kubectl (kubecolor optional)
-- **Wraps**: `kubectl`
+- **Purpose**: Plugin dispatch and enhanced kubectl get
+- **Pattern**: Function detection → plugin execution, enhanced syntax detection → kubectl-get, otherwise → `command kubectl`
+- **Dependencies**: kubectl only
+- **Abbreviation**: `k` expands to `kubectl` via `conf.d/k_abbr.fish`
 
 ## 🧪 Testing Standards
 

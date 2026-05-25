@@ -8,7 +8,7 @@ kubectl.fish is a collection of kubectl plugins and functions written in Fish sh
 
 ## Core Functions
 
-- **k**: Smart kubectl wrapper with plugin dispatch, kubecolor integration, and enhanced get detection
+- **kubectl**: Smart kubectl wrapper with plugin dispatch and enhanced get detection. `k` is a fish abbreviation that expands to `kubectl`.
 - **kubectl-get**: Enhanced kubectl get with template system, jq integration, and smart sorting
 - **kt**: Kubeconfig switcher for quick context changes
 - **kubectl-gron**: Flatten JSON resources using gron/fastgron for easier parsing
@@ -111,16 +111,16 @@ end
 
 ### Plugin Discovery
 
-The `k` wrapper discovers kubectl-* functions by:
+The `kubectl` wrapper discovers kubectl-* functions by:
 1. Checking if first argument matches a `kubectl-*` function name
 2. If match found, calling that function with remaining arguments
-3. Otherwise, delegating to kubectl (or kubecolor if available)
+3. Otherwise, delegating to kubectl
 
 ### Tab Completion
 
 Fish tab completions are provided in the `completions/` directory:
 
-- `completions/k.fish` — Template completion for `k get ^<TAB>`
+- `completions/kubectl.fish` — Template completion for `kubectl get ^<TAB>` (and `k get ^<TAB>` via abbreviation)
 - `completions/kubectl-get.fish` — Template completion for `kubectl-get ^<TAB>`
 
 Completions use `__kubectl_complete_templates` to list available template names from the templates directory. They activate only when the current token starts with `^`.
@@ -133,10 +133,10 @@ The enhanced kubectl get system consists of several components working together:
 
 #### Component Overview
 
-1. **k wrapper** (`k.fish`):
+1. **kubectl wrapper** (`kubectl.fish`):
    - Detects enhanced get syntax (`^template` or `.field`) in arguments
    - Delegates to `kubectl-get` when enhanced syntax detected
-   - Falls through to normal kubectl/kubecolor otherwise
+   - Falls through to normal kubectl otherwise
 
 2. **kubectl-get** (`kubectl-get.fish`):
    - Main enhanced get function
@@ -186,7 +186,7 @@ NAME:.metadata.name,STATUS:.status.phase,AGE:.metadata.creationTimestamp
 ```
 User Command: k get pods ^pods-wide
     ↓
-k wrapper detects '^' syntax
+kubectl wrapper detects '^' syntax
     ↓
 Calls: kubectl-get pods ^pods-wide
     ↓
@@ -238,7 +238,6 @@ The test suite covers:
 
 Functions prefer faster alternatives when available:
 - `kubectl-gron`: Checks for `fastgron` first, falls back to `gron`
-- `k` wrapper: Uses `kubecolor` if available, falls back to `kubectl`
 
 ### Variable Scoping
 
@@ -274,6 +273,5 @@ Tests run automatically on:
 ### Optional (function-specific)
 - gron or fastgron (for kubectl-gron)
 - jq (for kubectl-list-events, kubectl-why-not-deleted)
-- kubecolor (for enhanced k wrapper)
 - column (usually pre-installed, for kubectl-list-events)
 - fishcheck (for enhanced linting via npm)
