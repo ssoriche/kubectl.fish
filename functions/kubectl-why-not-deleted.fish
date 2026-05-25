@@ -144,7 +144,7 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
     echo ""
 
     # Get the resource in JSON format
-    set -l resource_json (kubectl get $resource_type $resource_name $namespace_args -o json 2>/dev/null)
+    set -l resource_json (command kubectl get $resource_type $resource_name $namespace_args -o json 2>/dev/null)
 
     if test $status -ne 0
         echo "❌ Error: Could not find $resource_type/$resource_name"
@@ -200,9 +200,9 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
             set -l owner_kind (echo $owner | cut -d'/' -f1)
             set -l owner_name (echo $owner | cut -d'/' -f2)
 
-            set -l owner_exists (kubectl get $owner_kind $owner_name $namespace_args -o name 2>/dev/null)
+            set -l owner_exists (command kubectl get $owner_kind $owner_name $namespace_args -o name 2>/dev/null)
             if test -n "$owner_exists"
-                set -l owner_deletion (kubectl get $owner_kind $owner_name $namespace_args -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)
+                set -l owner_deletion (command kubectl get $owner_kind $owner_name $namespace_args -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)
                 if test -n "$owner_deletion"
                     echo "     Status: Owner is also marked for deletion ($owner_deletion)"
                 else
@@ -233,7 +233,7 @@ function kubectl-why-not-deleted -d "Analyze why a Kubernetes resource is not be
         set -l resource_types pods replicasets deployments services configmaps secrets persistentvolumeclaims
 
         for rt in $resource_types
-            set -l owned_resources (kubectl get $rt $namespace_args -o json 2>/dev/null | jq -r --arg uid "$resource_uid" '.items[]? | select(.metadata.ownerReferences[]?.uid == $uid) | "\(.kind)/\(.metadata.name)"' 2>/dev/null)
+            set -l owned_resources (command kubectl get $rt $namespace_args -o json 2>/dev/null | jq -r --arg uid "$resource_uid" '.items[]? | select(.metadata.ownerReferences[]?.uid == $uid) | "\(.kind)/\(.metadata.name)"' 2>/dev/null)
 
             if test -n "$owned_resources"
                 for dep in $owned_resources

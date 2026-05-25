@@ -71,5 +71,5 @@ function kubectl-gron -d "Dump Kubernetes resources with gron or fastgron" --wra
     end
 
     # Run kubectl get and pipe to gron - let kubectl handle connection errors
-    kubectl get $argv -o json | $gron_cmd
+    command kubectl get $argv -o json | $gron_cmd
 end

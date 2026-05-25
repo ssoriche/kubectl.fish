@@ -108,8 +108,8 @@ function kubectl-secret -d "View and decode Kubernetes secrets" --wraps 'kubectl
             echo "Error: invalid key name '$key'; keys must match [-._a-zA-Z0-9]+" >&2
             return 1
         end
-        kubectl get secret $secret_name $kubectl_flags -o go-template="{{index .data \"$key\" | base64decode}}{{\"\\n\"}}"
+        command kubectl get secret $secret_name $kubectl_flags -o go-template="{{index .data \"$key\" | base64decode}}{{\"\\n\"}}"
     else
-        kubectl get secret $secret_name $kubectl_flags -o go-template='{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}'
+        command kubectl get secret $secret_name $kubectl_flags -o go-template='{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}'
     end
 end
