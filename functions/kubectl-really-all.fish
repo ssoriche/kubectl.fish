@@ -72,5 +72,5 @@ function kubectl-really-all -d "Get all namespaced resources across all namespac
     end
 
     # Execute kubectl get with error handling - let kubectl handle connection errors
-    kubectl get $resource_list --ignore-not-found $argv
+    command kubectl get $resource_list --ignore-not-found $argv
 end

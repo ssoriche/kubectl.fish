@@ -57,5 +57,5 @@ function kubectl-dump -d "Dump Kubernetes resources as YAML" --wraps 'kubectl ge
     end
 
     # Run kubectl get with YAML output - let kubectl handle connection errors
-    kubectl get $argv -o yaml
+    command kubectl get $argv -o yaml
 end

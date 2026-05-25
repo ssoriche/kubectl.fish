@@ -201,8 +201,8 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
     if test -n "$jq_expr"
         # Remove leading dot from jq expression if present
         set jq_expr (string replace -r '^\.' '' -- $jq_expr)
-        kubectl get $kubectl_args | jq ".$jq_expr"
+        command kubectl get $kubectl_args | jq ".$jq_expr"
     else
-        kubectl get $kubectl_args
+        command kubectl get $kubectl_args
     end
 end
