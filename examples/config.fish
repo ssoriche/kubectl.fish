@@ -139,9 +139,6 @@ end
 # Auto-completion Enhancement
 # =====================================
 
-# Enhanced completion for the k wrapper function
-complete -c k -w kubectl
-
 # Custom completions for kubectl.fish functions
 complete -c kubectl-gron -w 'kubectl get'
 complete -c kubectl-dump -w 'kubectl get'

@@ -148,7 +148,6 @@ check-deps: ## Check for required and optional dependencies
 	@command -v gron >/dev/null 2>&1 && echo "  ✅ gron" || echo "  ⚠️  gron (optional, for kubectl-gron)"
 	@command -v fastgron >/dev/null 2>&1 && echo "  ✅ fastgron" || echo "  ⚠️  fastgron (optional, for kubectl-gron)"
 	@command -v jq >/dev/null 2>&1 && echo "  ✅ jq" || echo "  ⚠️  jq (optional, for kubectl-list-events)"
-	@command -v kubecolor >/dev/null 2>&1 && echo "  ✅ kubecolor" || echo "  ⚠️  kubecolor (optional, for enhanced k wrapper)"
 	@command -v column >/dev/null 2>&1 && echo "  ✅ column" || echo "  ⚠️  column (usually pre-installed)"
 	@command -v less >/dev/null 2>&1 && echo "  ✅ less" || echo "  ⚠️  less (usually pre-installed)"
 
@@ -212,7 +211,7 @@ release-check: lint test ## Run all checks before release
 install-deps-macos: ## Install optional dependencies on macOS using Homebrew
 	@echo "Installing optional dependencies on macOS..."
 	@command -v brew >/dev/null 2>&1 || (echo "❌ Homebrew is required" && exit 1)
-	@brew install gron jq kubecolor || echo "Some packages may already be installed"
+	@brew install gron jq || echo "Some packages may already be installed"
 	@echo "✅ Dependencies installed!"
 
 install-deps-ubuntu: ## Install optional dependencies on Ubuntu/Debian
@@ -232,9 +231,5 @@ install-deps-ubuntu: ## Install optional dependencies on Ubuntu/Debian
 	else \
 		echo "⚠️ fastgron installation failed, kubectl-gron will use gron"; \
 	fi
-	@echo "Installing kubecolor..."
-	@wget -O /tmp/kubecolor.tgz https://github.com/hidetatz/kubecolor/releases/download/v0.0.25/kubecolor_0.0.25_Linux_x86_64.tar.gz
-	@tar -xzf /tmp/kubecolor.tgz -C /tmp
-	@sudo mv /tmp/kubecolor /usr/local/bin/
-	@rm -f /tmp/gron.tgz /tmp/kubecolor.tgz
+	@rm -f /tmp/gron.tgz
 	@echo "✅ Dependencies installed!"
