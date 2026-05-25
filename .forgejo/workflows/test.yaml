@@ -184,8 +184,9 @@ jobs:
 
       - name: Install functions
         run: |
-          mkdir -p ~/.config/fish/functions
+          mkdir -p ~/.config/fish/functions ~/.config/fish/conf.d
           cp functions/*.fish ~/.config/fish/functions/
+          cp conf.d/*.fish ~/.config/fish/conf.d/
 
       - name: Test function loading
         run: |
@@ -193,7 +194,8 @@ jobs:
           fish -c "functions -q kubectl-dump && echo '✅ kubectl-dump loaded'"
           fish -c "functions -q kubectl-list-events && echo '✅ kubectl-list-events loaded'"
           fish -c "functions -q kubectl-really-all && echo '✅ kubectl-really-all loaded'"
-          fish -c "functions -q k && echo '✅ k wrapper loaded'"
+          fish -c "functions -q kubectl && echo '✅ kubectl wrapper loaded'"
+          fish -c "abbr -q k && echo '✅ k abbreviation registered'"
 
       - name: Test function help output
         run: |

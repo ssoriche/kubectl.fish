@@ -267,7 +267,7 @@ Tests run automatically on:
 ## Dependencies
 
 ### Required
-- Fish shell 3.0+
+- Fish shell 4.0+
 - kubectl
 
 ### Optional (function-specific)

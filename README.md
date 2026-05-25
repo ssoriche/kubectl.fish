@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ssoriche/kubectl.fish/actions/workflows/test.yaml/badge.svg)](https://github.com/ssoriche/kubectl.fish/actions/workflows/test.yaml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Fish Shell](https://img.shields.io/badge/fish-3.0%2B-blue.svg)](https://fishshell.com/)
+[![Fish Shell](https://img.shields.io/badge/fish-4.0%2B-blue.svg)](https://fishshell.com/)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-compatible-326ce5.svg)](https://kubernetes.io/)
 
 A collection of kubectl plugins and functions written in fish shell, designed to enhance your Kubernetes workflow with powerful utilities and improved user experience.
@@ -26,7 +26,7 @@ A collection of kubectl plugins and functions written in fish shell, designed to
 
 ### Prerequisites
 
-- [Fish shell](https://fishshell.com/) 3.0 or later
+- [Fish shell](https://fishshell.com/) 4.0 or later
 - [kubectl](https://kubernetes.io/docs/tasks/tools/) configured for your cluster
 
 ### Method 1: Manual Installation
@@ -540,7 +540,7 @@ All pull requests are automatically tested using GitHub Actions and Forgejo CI/C
 
 ### Core Requirements
 
-- Fish shell 3.0+
+- Fish shell 4.0+
 - kubectl
 
 ### Optional Requirements
