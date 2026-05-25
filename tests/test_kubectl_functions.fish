@@ -13,7 +13,7 @@
 #   - Mock utilities for unit tests
 
 # Test configuration
-set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-get kt k __kubectl_find_template __kubectl_parse_get_args __kubectl_complete_templates kubectl-secret
+set -l test_functions kubectl-gron kubectl-list-events kubectl-really-all kubectl-dump kubectl-why-not-deleted kubectl-dyff kubectl-get kt kubectl __kubectl_find_template __kubectl_parse_get_args __kubectl_complete_templates kubectl-secret
 set -g test_results_passed 0
 set -g test_results_failed 0
 set -g test_results_skipped 0
@@ -58,6 +58,11 @@ function check_prerequisites
         source $func_file
     end
 
+    # Load conf.d files so abbreviations (e.g. k) are registered
+    for conf_file in conf.d/*.fish
+        source $conf_file
+    end
+
     # Check if functions are loaded
     for func in $test_functions
         if functions -q $func
@@ -82,19 +87,19 @@ function test_help_functionality
     test_assert "kubectl-really-all --help" "kubectl-really-all --help >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-why-not-deleted --help" "kubectl-why-not-deleted --help >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-dyff --help" "kubectl-dyff --help >/dev/null 2>&1; test \$status -eq 0" 0
-    test_assert "k --help" "k --help >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl --help" "kubectl --help >/dev/null 2>&1; test \$status -eq 0" 0
 
     # Test short help option
     test_assert "kubectl-gron -h" "kubectl-gron -h >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-why-not-deleted -h" "kubectl-why-not-deleted -h >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-dyff -h" "kubectl-dyff -h >/dev/null 2>&1; test \$status -eq 0" 0
-    test_assert "k -h" "k -h >/dev/null 2>&1; test \$status -eq 0" 0
+    test_assert "kubectl -h" "kubectl -h >/dev/null 2>&1; test \$status -eq 0" 0
 
     # Test that help output contains expected content
     test_assert "kubectl-gron help contains USAGE" "kubectl-gron --help | grep -q 'USAGE:'" 0
     test_assert "kubectl-why-not-deleted help contains USAGE" "kubectl-why-not-deleted --help | grep -q 'USAGE:'" 0
     test_assert "kubectl-dyff help contains USAGE" "kubectl-dyff --help | grep -q 'USAGE:'" 0
-    test_assert "k help contains AVAILABLE FUNCTIONS" "k --help | grep -q 'AVAILABLE KUBECTL.FISH FUNCTIONS:'" 0
+    test_assert "kubectl help contains AVAILABLE FUNCTIONS" "kubectl --help | grep -q 'AVAILABLE KUBECTL.FISH FUNCTIONS:'" 0
     test_assert "kubectl-secret --help" "kubectl-secret --help >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-secret -h" "kubectl-secret -h >/dev/null 2>&1; test \$status -eq 0" 0
     test_assert "kubectl-secret help contains USAGE" "kubectl-secret --help | grep -q 'USAGE:'" 0
@@ -115,7 +120,7 @@ function test_prerequisite_checking
     test_assert "kubectl-dump without kubectl command" "kubectl-dump pods" 1
     test_assert "kubectl-why-not-deleted without kubectl command" "kubectl-why-not-deleted pod test" 1
     test_assert "kubectl-dyff without kubectl command" "kubectl-dyff test.yaml" 1
-    test_assert "k without kubectl command" "k get pods" 1
+    test_assert "kubectl without kubectl command" "kubectl get pods" 1
     test_assert "kubectl-secret without kubectl command" "kubectl-secret my-secret" 1
 
     # Restore PATH
@@ -239,7 +244,7 @@ function test_argument_validation
     test_assert "kubectl-why-not-deleted with no arguments" kubectl-why-not-deleted 1
     test_assert "kubectl-why-not-deleted with only one argument" "kubectl-why-not-deleted pod" 1
     test_assert "kubectl-dyff with no arguments" kubectl-dyff 1
-    test_assert "k with no arguments" k 1
+    test_assert "kubectl with no arguments defers to real kubectl" "kubectl >/dev/null 2>&1; test \$status -eq 0 -o \$status -eq 1" 0
 
     # Test that error messages suggest using --help
     test_assert "kubectl-gron suggests --help" "kubectl-gron 2>&1 | grep -q 'kubectl-gron --help'" 0
@@ -251,8 +256,6 @@ function test_argument_validation
     else
         test_skip "kubectl-dyff shows usage" "dyff or yq not available"
     end
-
-    test_assert "k suggests --help" "k 2>&1 | grep -q 'k --help'" 0
     test_assert "kubectl-secret with no arguments" kubectl-secret 1
     test_assert "kubectl-secret suggests --help" "kubectl-secret 2>&1 | grep -q 'kubectl-secret --help'" 0
     test_assert "kubectl-secret with too many arguments" "kubectl-secret a b c 2>&1; test \$status -eq 1" 0
@@ -267,7 +270,6 @@ function test_consistency
     test_assert "kubectl-dump error format" "kubectl-dump 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-why-not-deleted error format" "kubectl-why-not-deleted 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-dyff error format" "kubectl-dyff 2>&1 | grep -q '^Error:'" 0
-    test_assert "k error format" "k 2>&1 | grep -q '^Error:'" 0
     test_assert "kubectl-secret error format" "kubectl-secret 2>&1 | grep -q '^Error:'" 0
 
     # Test that all functions use consistent --wraps annotation (check function definition)
@@ -277,8 +279,12 @@ function test_consistency
     test_assert "kubectl-really-all has proper wraps" "functions kubectl-really-all | grep -q 'kubectl'" 0
     test_assert "kubectl-why-not-deleted has proper wraps" "functions kubectl-why-not-deleted | grep -q 'kubectl'" 0
     test_assert "kubectl-dyff has proper wraps" "functions kubectl-dyff | grep -q 'kubectl'" 0
-    test_assert "k has proper wraps" "functions k | grep -q 'kubectl'" 0
+    test_assert "kubectl wrapper is defined" "functions -q kubectl" 0
     test_assert "kubectl-secret has proper wraps" "functions kubectl-secret | grep -q 'kubectl'" 0
+
+    # Test abbreviation registration
+    test_assert "k is registered as abbreviation" "abbr -q k" 0
+    test_assert "k is not a function" "not functions -q k" 0
 end
 
 function test_argument_forwarding
@@ -389,8 +395,8 @@ function test_integration_basic
     # Test kubectl-dump with a common resource
     test_assert "kubectl-dump namespaces" "kubectl-dump namespaces >/dev/null 2>&1; test \$status -eq 0" 0
 
-    # Test k wrapper functionality
-    test_assert "k get namespaces" "k get namespaces >/dev/null 2>&1; test \$status -eq 0" 0
+    # Test kubectl wrapper functionality
+    test_assert "kubectl get namespaces" "kubectl get namespaces >/dev/null 2>&1; test \$status -eq 0" 0
 
     # Test kubectl-list-events
     if command -q jq
@@ -418,18 +424,18 @@ end
 function test_function_registration
     echo "=== Testing Function Registration ==="
 
-    # Test that k function can discover kubectl-* functions
+    # Test that kubectl wrapper can discover kubectl-* functions
     if command -q kubectl
-        set -l discovered_functions (k --help | grep -A 10 "AVAILABLE KUBECTL.FISH FUNCTIONS:" | grep -E '^\s+' | string trim)
+        set -l discovered_functions (kubectl --help | grep -A 10 "AVAILABLE KUBECTL.FISH FUNCTIONS:" | grep -E '^\s+' | string trim)
 
         if test (count $discovered_functions) -gt 0
-            echo "✓ k function discovers kubectl-* functions:"
+            echo "✓ kubectl wrapper discovers kubectl-* functions:"
             for func in $discovered_functions
                 echo "    - $func"
             end
             set -g test_results_passed (math $test_results_passed + 1)
         else
-            echo "✗ k function does not discover kubectl-* functions"
+            echo "✗ kubectl wrapper does not discover kubectl-* functions"
             set -g test_results_failed (math $test_results_failed + 1)
         end
     else
@@ -448,7 +454,7 @@ function test_linting_standards
     test_assert "Fish syntax validation" "fish -n functions/kubectl-really-all.fish" 0
     test_assert "Fish syntax validation" "fish -n functions/kubectl-why-not-deleted.fish" 0
     test_assert "Fish syntax validation" "fish -n functions/kubectl-dyff.fish" 0
-    test_assert "Fish syntax validation" "fish -n functions/k.fish" 0
+    test_assert "Fish syntax validation" "fish -n functions/kubectl.fish" 0
 
     # Test formatting consistency
     if command -q fish_indent
@@ -532,19 +538,19 @@ function test_kt_functionality
 end
 
 function test_enhanced_k_wrapper
-    echo "=== Testing Enhanced k Wrapper ==="
+    echo "=== Testing Enhanced kubectl Wrapper ==="
 
-    # Test that k help mentions enhanced get
-    test_assert "k help contains ENHANCED GET SYNTAX" "k --help | grep -q 'ENHANCED GET SYNTAX:'" 0
+    # Test that kubectl help mentions enhanced get
+    test_assert "kubectl help contains ENHANCED GET SYNTAX" "kubectl --help | grep -q 'ENHANCED GET SYNTAX:'" 0
 
     # Test kubectl-get is listed in available functions
     if functions -q kubectl-get
-        test_assert "kubectl-get in k --help output" "k --help | grep -q 'get'" 0
+        test_assert "kubectl-get in kubectl --help output" "kubectl --help | grep -q 'get'" 0
     end
 
     # Test kt is listed in available functions
     if functions -q kt
-        test_assert "kt in k --help output" "k --help | grep -q 'Functions:' || k --help" 0
+        test_assert "kt in kubectl --help output" "kubectl --help | grep -q 'Functions:' || kubectl --help" 0
     end
 end
 
