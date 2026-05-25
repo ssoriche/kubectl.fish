@@ -1,3 +1,36 @@
+#!/usr/bin/env fish
+
+# kubectl - Smart kubectl wrapper with plugin dispatch
+#
+# DESCRIPTION:
+#     This function wraps the standard kubectl command and dispatches to
+#     kubectl-* fish functions in this collection when the first argument
+#     matches a defined function. It also recognizes the enhanced `get`
+#     syntax (^template-name for custom-columns templates, .field for jq
+#     extraction) and routes those to kubectl-get. Anything else falls
+#     through to the real kubectl binary via `command kubectl`.
+#
+#     The companion `k` abbreviation (conf.d/k_abbr.fish) expands to
+#     `kubectl`, so `k get pods` and `kubectl get pods` flow through the
+#     same dispatcher.
+#
+# USAGE:
+#     kubectl [subcommand|kubectl-function-name] [args...]
+#     k       [subcommand|kubectl-function-name] [args...]   # abbreviation
+#
+# EXAMPLES:
+#     kubectl get pods                          # Standard kubectl
+#     kubectl get pods ^pods-wide               # Enhanced get with template
+#     kubectl get pods .items[0].metadata.name  # Enhanced get with jq
+#     kubectl gron pods                         # kubectl-gron plugin
+#     kubectl list-events                       # kubectl-list-events plugin
+#
+# DEPENDENCIES:
+#     - kubectl: Kubernetes command-line tool
+#
+# AUTHOR:
+#     kubectl.fish collection
+
 function kubectl -d "Smart kubectl wrapper with plugin support"
     # Handle help option only when no other args (so `kubectl --help` still
     # passes through to real kubectl). Use a sentinel: if --help/-h is the
