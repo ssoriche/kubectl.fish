@@ -5,7 +5,7 @@
 # DESCRIPTION:
 #     Internal helper function for Fish tab completion. Lists available
 #     template names from the configured templates directory, stripping
-#     file extensions. Used by completion files for k and kubectl-get.
+#     file extensions. Used by completion files for kubectl and kubectl-get.
 #
 # USAGE:
 #     __kubectl_complete_templates

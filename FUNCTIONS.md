@@ -15,7 +15,7 @@ function __kubectl_complete_templates -d "List available kubectl template names 
 **Description:**
 Internal helper function for Fish tab completion. Lists available
 template names from the configured templates directory, stripping
-file extensions. Used by completion files for k and kubectl-get.
+file extensions. Used by completion files for kubectl and kubectl-get.
 
 USAGE:
 __kubectl_complete_templates
@@ -301,5 +301,14 @@ function kubectl -d "Smart kubectl wrapper with plugin support"
 ```
 
 **Description:**
-No description available
+This function wraps the standard kubectl command and dispatches to
+kubectl-* fish functions in this collection when the first argument
+matches a defined function. It also recognizes the enhanced `get`
+syntax (^template-name for custom-columns templates, .field for jq
+extraction) and routes those to kubectl-get. Anything else falls
+through to the real kubectl binary via `command kubectl`.
+
+The companion `k` abbreviation (conf.d/k_abbr.fish) expands to
+`kubectl`, so `k get pods` and `kubectl get pods` flow through the
+same dispatcher.
 

@@ -202,6 +202,9 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
         # Remove leading dot from jq expression if present
         set jq_expr (string replace -r '^\.' '' -- $jq_expr)
         command kubectl get $kubectl_args | jq ".$jq_expr"
+        # Preserve kubectl's exit code so failures aren't masked by jq
+        set -l pipe_status $pipestatus
+        return $pipe_status[1]
     else
         command kubectl get $kubectl_args
     end
