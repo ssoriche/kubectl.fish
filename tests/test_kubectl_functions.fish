@@ -284,11 +284,6 @@ end
 function test_argument_forwarding
     echo "=== Testing Argument Forwarding ==="
 
-    if not command -q kubectl
-        test_skip "Argument forwarding tests" "kubectl not available"
-        return
-    end
-
     # Test kubectl-list-events argument forwarding using a PATH shim
     function test_kubectl_list_events_forwarding
         set -l temp_dir (mktemp -d)
@@ -656,11 +651,6 @@ end
 
 function test_kubectl_secret_forwarding
     echo "=== Testing kubectl-secret Argument Forwarding ==="
-
-    if not command -q kubectl
-        test_skip "kubectl-secret forwarding tests" "kubectl not available"
-        return
-    end
 
     function test_kubectl_secret_list_mode
         set -l temp_dir (mktemp -d)
