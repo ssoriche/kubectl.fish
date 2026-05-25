@@ -20,18 +20,24 @@ install: check-fish ## Install functions to fish functions directory
 		mkdir -p ~/.config/fish/completions; \
 		cp completions/*.fish ~/.config/fish/completions/; \
 	fi
+	@if [ -d conf.d ]; then \
+		echo "Installing conf.d files..."; \
+		mkdir -p ~/.config/fish/conf.d; \
+		cp conf.d/*.fish ~/.config/fish/conf.d/; \
+	fi
 	@echo "✅ Functions installed successfully!"
 	@echo "   Restart your fish shell or run 'source ~/.config/fish/config.fish'"
 
 uninstall: check-fish ## Remove functions from fish functions directory
 	@echo "Uninstalling kubectl.fish functions..."
 	@rm -f ~/.config/fish/functions/kubectl-*.fish
-	@rm -f ~/.config/fish/functions/k.fish
+	@rm -f ~/.config/fish/functions/kubectl.fish
 	@rm -f ~/.config/fish/functions/__kubectl_find_template.fish
 	@rm -f ~/.config/fish/functions/__kubectl_parse_get_args.fish
 	@rm -f ~/.config/fish/functions/__kubectl_complete_templates.fish
-	@rm -f ~/.config/fish/completions/k.fish
+	@rm -f ~/.config/fish/completions/kubectl.fish
 	@rm -f ~/.config/fish/completions/kubectl-get.fish
+	@rm -f ~/.config/fish/conf.d/k_abbr.fish
 	@echo "✅ Functions uninstalled successfully!"
 
 # Testing targets
@@ -57,7 +63,7 @@ lint: check-fish ## Check fish syntax and formatting for all functions
 	@echo ""
 
 	@echo "Checking Fish syntax..."
-	@for file in functions/*.fish tests/*.fish completions/*.fish; do \
+	@for file in functions/*.fish tests/*.fish completions/*.fish conf.d/*.fish; do \
 		echo "  Checking $$file..."; \
 		fish -n "$$file" || exit 1; \
 	done
@@ -65,7 +71,7 @@ lint: check-fish ## Check fish syntax and formatting for all functions
 	@echo ""
 
 	@echo "Checking Fish formatting..."
-	@for file in functions/*.fish tests/*.fish completions/*.fish; do \
+	@for file in functions/*.fish tests/*.fish completions/*.fish conf.d/*.fish; do \
 		echo "  Checking formatting of $$file..."; \
 		fish_indent < "$$file" > "/tmp/$$(basename $$file).formatted" 2>/dev/null || { \
 			echo "❌ Error formatting $$file"; \
@@ -83,7 +89,7 @@ lint: check-fish ## Check fish syntax and formatting for all functions
 
 	@if command -v fishcheck >/dev/null 2>&1; then \
 		echo "Running fishcheck linting..."; \
-		fishcheck functions/*.fish tests/*.fish completions/*.fish || exit 1; \
+		fishcheck functions/*.fish tests/*.fish completions/*.fish conf.d/*.fish || exit 1; \
 		echo "✅ All files pass fishcheck validation"; \
 	else \
 		echo "⚠️  fishcheck not available - install for enhanced linting"; \
@@ -107,7 +113,7 @@ lint: check-fish ## Check fish syntax and formatting for all functions
 
 format: check-fish ## Format all Fish files using fish_indent
 	@echo "🎨 Formatting Fish files..."
-	@for file in functions/*.fish tests/*.fish completions/*.fish; do \
+	@for file in functions/*.fish tests/*.fish completions/*.fish conf.d/*.fish; do \
 		echo "  Formatting $$file..."; \
 		fish_indent < "$$file" > "$$file.tmp" && mv "$$file.tmp" "$$file"; \
 	done
@@ -118,7 +124,7 @@ lint-fix: format lint ## Format files and run linting
 
 check-formatting: check-fish ## Check if files are properly formatted (non-destructive)
 	@echo "Checking Fish file formatting..."
-	@for file in functions/*.fish tests/*.fish completions/*.fish; do \
+	@for file in functions/*.fish tests/*.fish completions/*.fish conf.d/*.fish; do \
 		echo "  Checking $$file..."; \
 		fish_indent < "$$file" > "/tmp/$$(basename $$file).formatted"; \
 		if ! diff -u "$$file" "/tmp/$$(basename $$file).formatted" >/dev/null; then \
