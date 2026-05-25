@@ -163,6 +163,7 @@ jobs:
       - name: Install Fish shell (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
+          sudo apt-add-repository -y ppa:fish-shell/release-4
           sudo apt-get update
           sudo apt-get install -y fish
 
@@ -178,8 +179,10 @@ jobs:
             brew install jq
           fi
 
-      - name: Check Fish version
-        run: fish --version
+      - name: Check Fish version (require >= 4.0)
+        run: |
+          fish --version
+          fish --version | awk '{print $3}' | awk -F. '{ if ($1 < 4) { print "Fish < 4.0 detected; this project requires Fish 4.0+"; exit 1 } }'
 
       - name: Check syntax
         run: |
