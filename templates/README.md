@@ -130,6 +130,9 @@ Credit: https://github.com/ripta/dotfiles/tree/master/zsh-custom/plugins/kube/te
 - `crds.tmpl` - Custom Resource Definitions with conversion strategy
 - `finalizers.tmpl` - Resources with finalizers blocking deletion
 
+#### Karpenter
+- `nodeclaim-drift.tmpl` - NodeClaim drift status and reason (Drifted condition)
+
 ## Importing Templates from zsh Plugin
 
 The original inspiration for this feature comes from the zsh kubectl plugin, which includes many production-ready templates. See the implementation plan for importing these templates.
