@@ -6,7 +6,7 @@
 #     Enhanced wrapper around 'kubectl get' that adds support for:
 #     - Custom-columns templates with ^template-name syntax
 #     - jq field extraction with .field syntax
-#     - Smart auto-sorting for events, nodes, and replicasets
+#     - Smart auto-sorting for events, nodes, replicasets, and nodeclaims
 #
 # USAGE:
 #     kubectl-get RESOURCE [NAME] [FLAGS...]
@@ -36,6 +36,7 @@
 #     - events: Automatically sorted by .lastTimestamp
 #     - nodes: Automatically sorted by .metadata.creationTimestamp
 #     - replicasets: Automatically sorted by .metadata.creationTimestamp
+#     - nodeclaims: Automatically sorted by .metadata.creationTimestamp
 #
 # DEPENDENCIES:
 #     - kubectl: Kubernetes command-line tool
@@ -58,7 +59,7 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
         echo "  Enhanced wrapper around 'kubectl get' that adds support for:"
         echo "    - Custom-columns templates with ^template-name syntax"
         echo "    - jq field extraction with .field syntax"
-        echo "    - Smart auto-sorting for events, nodes, and replicasets"
+        echo "    - Smart auto-sorting for events, nodes, replicasets, and nodeclaims"
         echo ""
         echo "EXAMPLES:"
         echo "  kubectl-get pods                    # Standard kubectl get"
@@ -83,6 +84,7 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
         echo "  - events: Automatically sorted by .lastTimestamp"
         echo "  - nodes: Automatically sorted by .metadata.creationTimestamp"
         echo "  - replicasets: Automatically sorted by .metadata.creationTimestamp"
+        echo "  - nodeclaims: Automatically sorted by .metadata.creationTimestamp"
         echo ""
         echo "DEPENDENCIES:"
         echo "  - kubectl: Kubernetes command-line tool"
@@ -193,6 +195,8 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
             case nodes node no
                 set kubectl_args $kubectl_args "--sort-by=.metadata.creationTimestamp"
             case replicasets replicaset rs
+                set kubectl_args $kubectl_args "--sort-by=.metadata.creationTimestamp"
+            case nodeclaims nodeclaim
                 set kubectl_args $kubectl_args "--sort-by=.metadata.creationTimestamp"
         end
     end

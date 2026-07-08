@@ -179,6 +179,7 @@ NAME:.metadata.name,STATUS:.status.phase,AGE:.metadata.creationTimestamp
 - `events`: Automatically add `--sort-by=.lastTimestamp`
 - `nodes`: Automatically add `--sort-by=.metadata.creationTimestamp`
 - `replicasets`: Automatically add `--sort-by=.metadata.creationTimestamp`
+- `nodeclaims`: Automatically add `--sort-by=.metadata.creationTimestamp`
 - Only applied if no existing `--sort-by` flag
 
 #### Integration Flow
