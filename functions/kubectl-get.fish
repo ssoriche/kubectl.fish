@@ -24,9 +24,12 @@
 # TEMPLATE SYNTAX:
 #     ^template-name  - Loads template from:
 #                       $KUBECTL_TEMPLATES_DIR or ~/.kube/templates/
-#                       Templates can be either:
+#                       Templates can be any of:
 #                       - Custom-columns format: NAME:.metadata.name,...
 #                       - FLAGS format: FLAGS:-L label1 -L label2 ...
+#                       - Go template: any content containing {{ }}
+#                         (may span multiple lines; can join across
+#                         resource types, e.g. 'get pods,nodes')
 #
 # JQ SYNTAX:
 #     .field          - Extracts JSON field using jq
@@ -72,9 +75,10 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
         echo "TEMPLATE SYNTAX:"
         echo "  ^template-name  - Loads template from:"
         echo "                    \$KUBECTL_TEMPLATES_DIR or ~/.kube/templates/"
-        echo "                    Templates can be either:"
+        echo "                    Templates can be any of:"
         echo "                      - Custom-columns: NAME:.metadata.name,..."
         echo "                      - FLAGS format: FLAGS:-L label1 -L label2 ..."
+        echo "                      - Go template: any content containing {{ }}"
         echo ""
         echo "JQ SYNTAX:"
         echo "  .field          - Extracts JSON field using jq"
@@ -151,13 +155,28 @@ function kubectl-get -d "Enhanced kubectl get with templates and jq support" --w
             return 1
         end
 
-        set -l template_content (cat $template_path)
+        # string collect keeps the file as ONE element with newlines intact.
+        # Without it, command substitution splits on newlines and the quoted
+        # expansion below re-joins with spaces, silently flattening multi-line
+        # Go templates onto a single output line.
+        #
+        # -N additionally preserves the trailing newline, which a Go template
+        # may need as the terminator for its last rendered row. The trimmed
+        # form is used for dispatch matching and for the two single-line
+        # formats, where a trailing newline would land inside the last JSONPath
+        # or the last flag value.
+        set -l template_raw (cat $template_path | string collect -N)
+        set -l template_content (cat $template_path | string collect)
 
         # Check if template uses FLAGS: format instead of custom-columns
         if string match -qr '^FLAGS:' -- $template_content
             # Extract flags after "FLAGS:" prefix and add to kubectl args
             set -l flags (string replace 'FLAGS:' '' -- $template_content)
             set kubectl_args $kubectl_args (string split ' ' -- $flags)
+        else if string match -q '*{{*' -- $template_content
+            # Go template: can join across resource types (kubectl get pods,nodes)
+            # in ways custom-columns cannot, since every item carries its own .kind
+            set kubectl_args $kubectl_args "--output=go-template=$template_raw"
         else
             # Traditional custom-columns template
             set kubectl_args $kubectl_args "--output=custom-columns=$template_content"

@@ -50,6 +50,66 @@ function test_skip -a description reason
     echo
 end
 
+# Invoke kubectl-get with ^TEMPLATE against a kubectl shim on PATH, then assert
+# something about the argument list the shim actually received. Requires
+# $KUBECTL_CAPTURE and $KUBECTL_TEMPLATES_DIR to be set by the caller.
+#
+# Inspection happens entirely inside this function: a captured argument may
+# contain newlines, and returning one through command substitution would split
+# it, which is the very failure these tests exist to catch.
+#
+#   has-prefix  PREFIX        an argument starts with PREFIX
+#   has-exact   LITERAL       an argument equals LITERAL exactly
+#   equals-value PREFIX VALUE the PREFIX argument, prefix stripped, equals VALUE
+#   equals-file PREFIX FILE   ...equals the exact bytes of FILE
+#   count-lines PREFIX        echo that argument's newline-split element count
+function __test_dispatch -a template_name mode selector expected
+    rm -f $KUBECTL_CAPTURE
+    kubectl-get pods ^$template_name >/dev/null 2>&1
+
+    if not test -f $KUBECTL_CAPTURE
+        return 1
+    end
+
+    set -l args (cat $KUBECTL_CAPTURE | string split0)
+
+    if test $mode = has-exact
+        contains -- $selector $args
+        return $status
+    end
+
+    # The captured argument is compared as-is. Stripping the prefix would mean
+    # piping it through another command, and every command appends a newline of
+    # its own that 'string collect -N' then faithfully preserves -- producing a
+    # spurious second trailing newline and a false failure.
+    for arg in $args
+        if not string match -q -- "$selector*" $arg
+            continue
+        end
+
+        switch $mode
+            case has-prefix
+                return 0
+            case equals-value
+                test "$arg" = "$selector$expected"
+                return $status
+            case equals-file
+                set -l want (cat $expected | string collect -N)
+                test "$arg" = "$selector$want"
+                return $status
+            case count-lines
+                count (string split \n -- $arg)
+                return 0
+        end
+    end
+
+    # count-lines must still emit a number when nothing matched
+    if test $mode = count-lines
+        echo 0
+    end
+    return 1
+end
+
 function check_prerequisites
     echo "=== Checking Prerequisites ==="
 
@@ -507,8 +567,66 @@ function test_kubectl_get_functionality
         test_assert "__kubectl_find_template with KUBECTL_TEMPLATES_DIR" \
             "KUBECTL_TEMPLATES_DIR=$temp_dir __kubectl_find_template test | grep -q 'test.tmpl'" 0
 
+        # Documents the hazard the implementation guards against: plain command
+        # substitution splits a multi-line template into one element per line,
+        # and the quoted expansion in kubectl-get then re-joins with spaces,
+        # flattening every rendered row onto one output line.
+        printf '%s\n%s\n%s\n' '{{ range .items }}' '{{ .metadata.name }}' '{{ end }}' >$temp_dir/multiline.tmpl
+
+        test_assert "plain substitution splits a multi-line template" \
+            "test (count (cat $temp_dir/multiline.tmpl)) -eq 3" 0
+
         # Cleanup
         rm -rf $temp_dir
+    end
+
+    # Verify the arguments kubectl-get actually builds, by invoking it against a
+    # kubectl shim on PATH. Asserting on 'string collect' or 'string match' in
+    # isolation would still pass if the dispatcher stopped emitting
+    # --output=go-template entirely, or flattened the template on the way there.
+    if functions -q kubectl-get
+        set -l shim_dir (mktemp -d)
+        set -l tpl_dir (mktemp -d)
+
+        printf '%s\n' \
+            '#!/bin/sh' \
+            ': >"$KUBECTL_CAPTURE"' \
+            'for a in "$@"; do printf "%s\0" "$a" >>"$KUBECTL_CAPTURE"; done' >$shim_dir/kubectl
+        chmod +x $shim_dir/kubectl
+
+        printf '%s\n%s\n%s\n' '{{ range .items }}' '{{ .metadata.name }}' '{{ end }}' >$tpl_dir/gotmpl.tmpl
+        echo 'NAME:.metadata.name' >$tpl_dir/cc.tmpl
+        echo 'FLAGS:-L app -L tier' >$tpl_dir/flags.tmpl
+
+        set -lx PATH $shim_dir $PATH
+        set -lx KUBECTL_TEMPLATES_DIR $tpl_dir
+        set -lx KUBECTL_CAPTURE $shim_dir/args
+
+        test_assert "go template dispatches to --output=go-template" \
+            "__test_dispatch gotmpl has-prefix '--output=go-template='" 0
+
+        test_assert "dispatched go template matches the file byte for byte" \
+            "__test_dispatch gotmpl equals-file '--output=go-template=' $tpl_dir/gotmpl.tmpl" 0
+
+        test_assert "dispatched go template keeps its newlines" \
+            "test (__test_dispatch gotmpl count-lines '--output=go-template=') -eq 4" 0
+
+        test_assert "custom-columns dispatches its exact spec" \
+            "__test_dispatch cc equals-value '--output=custom-columns=' NAME:.metadata.name" 0
+
+        test_assert "custom-columns is not dispatched as a go template" \
+            "not __test_dispatch cc has-prefix '--output=go-template='" 0
+
+        test_assert "FLAGS template dispatches -L as its own argument" \
+            "__test_dispatch flags has-exact -L" 0
+
+        test_assert "FLAGS template dispatches the label as its own argument" \
+            "__test_dispatch flags has-exact app" 0
+
+        test_assert "FLAGS template sets no output mode" \
+            "not __test_dispatch flags has-prefix --output=" 0
+
+        rm -rf $shim_dir $tpl_dir
     end
 
     # Test argument parsing helper

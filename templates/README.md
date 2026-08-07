@@ -34,7 +34,15 @@ set -gx KUBECTL_TEMPLATES_DIR ~/my-custom-templates
 
 ## Template Format
 
-Templates use kubectl's custom-columns format. Each template file contains a single line with the column specification:
+A template file is one of three formats, detected by its content:
+
+| Format | Detected by | Becomes |
+|--------|-------------|---------|
+| custom-columns | anything else (the default) | `--output=custom-columns=…` |
+| flags | leading `FLAGS:` | the listed flags, appended to the command |
+| Go template | contains `{{` | `--output=go-template=…` |
+
+Most templates use kubectl's custom-columns format — a single line of column specifications:
 
 ```
 COLUMN_NAME:JSON_PATH,COLUMN_NAME:JSON_PATH,...
@@ -52,11 +60,52 @@ Usage:
 k get pods ^pods-wide
 ```
 
+### Go Templates
+
+Custom-columns renders one resource type at a time, so it cannot show a value
+that lives on a *different* object. Go templates can, because a multi-resource
+request returns a single `List` in which every item carries its own `.kind`:
+
+```fish
+k get pods,nodes ^pods-nodepools -n my-namespace
+```
+
+Go templates may span multiple lines. `kubectl-get` reads them with `string
+collect` so the newlines survive — without it, fish splits the file on newlines
+and then re-joins with spaces, flattening every rendered row onto one line.
+
+kubectl's template engine is Go's `text/template` plus two extra functions,
+`exists` and `base64decode`. Notably absent:
+
+- **No arithmetic.** There is no `add`, so values cannot be summed (you can list
+  each container's `restartCount`, but not total them).
+- **No `dict`.** Sprig is not available, so a lookup map cannot be built; joins
+  are a nested `range` — a linear scan per item.
+- **No `sort`.**
+
+Guard every field access that may be absent with `exists`, and prefer `printf`
+for column alignment so the output needs no `column -t`.
+
 ## Creating Your Own Templates
 
 1. Create a new `.tmpl` or `.template` file in one of the template directories
-2. Add your custom-columns specification
+2. Write its body in whichever of the three formats fits (see below)
 3. Use it with `k get RESOURCE ^your-template-name`
+
+Which format to reach for:
+
+- **One resource type, one value per column** → custom-columns. Put the column
+  specification on a single line. This is the right default.
+- **Only adding label or field columns** → `FLAGS:` followed by the flags, e.g.
+  `FLAGS:-L app -L tier`.
+- **A value that lives on a different object, or any conditional or fallback
+  logic** → a Go template. Remember that the request must ask for every resource
+  type involved (`k get pods,nodes ^your-template`), or the items you are
+  ranging over will not be there to find.
+
+The dispatcher picks the format from the file's content, not its name — anything
+containing `{{` is treated as a Go template, so a custom-columns file must not
+contain that sequence.
 
 ### Tips for Creating Templates
 
@@ -65,6 +114,8 @@ k get pods ^pods-wide
 - **Arrays**: Use `[*]` for all elements or `[0]` for first element
 - **Nested paths**: Chain with dots (e.g., `.status.conditions[*].type`)
 - **Test with kubectl**: Verify with `kubectl get ... -o json` first
+- **Go templates**: Guard optional fields with `exists`, align with `printf`, and
+  see `pods-nodepools.tmpl` for a worked cross-resource example
 
 ### Example: Creating a Custom Node Template
 
@@ -132,6 +183,7 @@ Credit: https://github.com/ripta/dotfiles/tree/master/zsh-custom/plugins/kube/te
 
 #### Karpenter
 - `nodeclaim-drift.tmpl` - NodeClaim drift status and reason (Drifted condition)
+- `pods-nodepools.tmpl` - Pods joined to their node's NodePool (Go template; requires `get pods,nodes`)
 
 ## Importing Templates from zsh Plugin
 
