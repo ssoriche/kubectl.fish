@@ -1,0 +1,28 @@
+{{- /* Pods joined to the Karpenter NodePool (or kops instance-group) of their node.
+
+Requires both resource types in one request, since the nodepool is a label on
+the Node and a Pod only carries .spec.nodeName:
+
+    k get pods,nodes ^pods-nodepools -n my-namespace
+
+Every item in a multi-resource List carries its own .kind (the API server omits
+it on typed lists, but kubectl backfills it on decode), which is what makes the
+nested-range join below possible. There is no dict/map builtin in kubectl's
+template engine, so the inner range is a linear scan per pod.
+
+NODEPOOL prefers karpenter.sh/nodepool and falls back to
+kops.k8s.io/instance-group. Karpenter nodes carry both, and the nodepool is not
+always derivable from the instance-group name, so the real label must win. */ -}}
+{{- $all := .items -}}
+{{- printf "%-46s %-10s %-21s %-33s %s" "POD" "STATUS" "NODE" "NODEPOOL" "INSTANCE-TYPE" }}
+{{ range $p := $all }}{{ if eq $p.kind "Pod" -}}
+{{- $node := "<unscheduled>" }}{{ if exists $p.spec "nodeName" }}{{ $node = $p.spec.nodeName }}{{ end -}}
+{{- $found := false }}{{ $np := "-" }}{{ $type := "-" -}}
+{{- range $n := $all }}{{ if and (eq $n.kind "Node") (eq $n.metadata.name $node) -}}
+{{- $found = true -}}
+{{- if exists $n.metadata.labels "karpenter.sh/nodepool" }}{{ $np = index $n.metadata.labels "karpenter.sh/nodepool" }}{{ else if exists $n.metadata.labels "kops.k8s.io/instance-group" }}{{ $np = index $n.metadata.labels "kops.k8s.io/instance-group" }}{{ end -}}
+{{- if exists $n.metadata.labels "node.kubernetes.io/instance-type" }}{{ $type = index $n.metadata.labels "node.kubernetes.io/instance-type" }}{{ end -}}
+{{- end }}{{ end -}}
+{{- if and (not $found) (ne $node "<unscheduled>") }}{{ $np = "<node-gone>" }}{{ end -}}
+{{- printf "%-46s %-10s %-21s %-33s %s" $p.metadata.name $p.status.phase $node $np $type }}
+{{ end }}{{ end -}}
