@@ -1,7 +1,7 @@
 # kubectl.fish Makefile
 # Provides convenient commands for development, testing, and installation
 
-.PHONY: help install uninstall test test-unit test-integration lint format lint-fix check-formatting clean check-deps check-fish version-check version-check-tag release-notes
+.PHONY: help install uninstall install-templates diff-templates test test-unit test-integration lint format lint-fix check-formatting clean check-deps check-fish version-check version-check-tag release-notes
 
 # Default target
 help: ## Show this help message
@@ -27,6 +27,58 @@ install: check-fish ## Install functions to fish functions directory
 	fi
 	@echo "✅ Functions installed successfully!"
 	@echo "   Restart your fish shell or run 'source ~/.config/fish/config.fish'"
+	@$(MAKE) --no-print-directory install-templates
+
+# Templates live outside the fish config directories, so no plugin manager
+# installs them: fisher only copies functions, completions, conf.d and themes.
+# Without this target a fresh install has the whole ^template dispatch mechanism
+# and nothing to dispatch to.
+install-templates: ## Install bundled templates (FORCE=1 to overwrite local edits)
+	@dir="$${KUBECTL_TEMPLATES_DIR:-$$HOME/.kube/templates}"; \
+	echo "Installing templates to $$dir..."; \
+	mkdir -p "$$dir"; \
+	added=0; updated=0; kept=0; \
+	for f in templates/*.tmpl; do \
+		name=`basename "$$f"`; \
+		if [ ! -f "$$dir/$$name" ]; then \
+			cp "$$f" "$$dir/$$name"; added=`expr $$added + 1`; \
+		elif cmp -s "$$f" "$$dir/$$name"; then \
+			:; \
+		elif [ -n "$(FORCE)" ]; then \
+			cp "$$f" "$$dir/$$name"; updated=`expr $$updated + 1`; \
+		else \
+			echo "  ⚠️  kept your version of $$name (differs from bundled)"; \
+			kept=`expr $$kept + 1`; \
+		fi; \
+	done; \
+	echo "✅ Templates installed: $$added added, $$updated overwritten, $$kept left alone"; \
+	if [ "$$kept" -gt 0 ]; then \
+		echo "   Run 'make diff-templates' to see the differences,"; \
+		echo "   or 'make install-templates FORCE=1' to replace them."; \
+	fi
+
+diff-templates: ## Show differences between bundled templates and installed ones
+	@dir="$${KUBECTL_TEMPLATES_DIR:-$$HOME/.kube/templates}"; \
+	echo "Comparing templates/ against $$dir"; \
+	found=0; \
+	for f in templates/*.tmpl; do \
+		name=`basename "$$f"`; \
+		if [ ! -f "$$dir/$$name" ]; then \
+			echo "  not installed: $$name"; found=`expr $$found + 1`; \
+		elif ! cmp -s "$$f" "$$dir/$$name"; then \
+			echo "--- differs: $$name"; \
+			diff -u "$$dir/$$name" "$$f" || true; \
+			found=`expr $$found + 1`; \
+		fi; \
+	done; \
+	for f in "$$dir"/*.tmpl; do \
+		[ -e "$$f" ] || continue; \
+		name=`basename "$$f"`; \
+		if [ ! -f "templates/$$name" ]; then \
+			echo "  local only: $$name"; found=`expr $$found + 1`; \
+		fi; \
+	done; \
+	test "$$found" -eq 0 && echo "✅ Templates are in sync" || echo "$$found template(s) differ"
 
 uninstall: check-fish ## Remove functions from fish functions directory
 	@echo "Uninstalling kubectl.fish functions..."
@@ -39,6 +91,8 @@ uninstall: check-fish ## Remove functions from fish functions directory
 	@rm -f ~/.config/fish/completions/kubectl-get.fish
 	@rm -f ~/.config/fish/conf.d/k_abbr.fish
 	@echo "✅ Functions uninstalled successfully!"
+	@echo "   Templates in ~/.kube/templates were left in place; that directory"
+	@echo "   holds your own templates too, so removing it is not safe to automate."
 
 # Testing targets
 test: check-deps test-unit test-integration ## Run all tests
