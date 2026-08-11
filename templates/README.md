@@ -158,32 +158,42 @@ This directory includes both example templates and production-ready templates im
 Credit: https://github.com/ripta/dotfiles/tree/master/zsh-custom/plugins/kube/templates
 
 #### Node Management
+
 - `nodes.tmpl` - Node capacity and allocatable resources
 - `nodes-instance.tmpl` - Node instance metadata (instance-group, instance-type, nodepool)
 - `cordoned.tmpl` - Show cordoned nodes with timestamp
 - `taints.tmpl` - Display node taints
 
 #### Pod Analysis
+
 - `images.tmpl` - Pod name, status, and container images
 - `qos.tmpl` - Pod Quality of Service class
 - `owners.tmpl` - Pod ownership references
 - `timestamps.tmpl` - Resource creation, deletion, and start times
 
 #### Service Mesh
+
 - `linkerd.tmpl` - Linkerd service mesh injection and proxy status
 
 #### ScaleOps Integration
+
 - `scaleops-pod.tmpl` - ScaleOps admission and policy info
 - `scaleops-pod-wide.tmpl` - Extended ScaleOps pod details
 - `scaleops-hpa.tmpl` - ScaleOps HPA analysis data
 
 #### Resource Management
+
 - `crds.tmpl` - Custom Resource Definitions with conversion strategy
 - `finalizers.tmpl` - Resources with finalizers blocking deletion
 
 #### Karpenter
+
 - `nodeclaim-drift.tmpl` - NodeClaim drift status and reason (Drifted condition)
 - `pods-nodepools.tmpl` - Pods joined to their node's NodePool (Go template; requires `get pods,nodes`)
+
+#### ArgoCD
+
+- `argocd-status.tmpl` - Application sync status, health, deployed revision, and destination namespace
 
 ## Importing Templates from zsh Plugin
 
