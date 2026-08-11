@@ -14,8 +14,32 @@ NODEPOOL prefers karpenter.sh/nodepool and falls back to
 kops.k8s.io/instance-group. Karpenter nodes carry both, and the nodepool is not
 always derivable from the instance-group name, so the real label must win. */ -}}
 {{- $all := .items -}}
-{{- printf "%-46s %-10s %-21s %-33s %s" "POD" "STATUS" "NODE" "NODEPOOL" "INSTANCE-TYPE" }}
+{{- /* Measure the columns before printing any of them. Generated pod names run
+from ~20 to ~80 characters, so a hardcoded width misaligns every row that
+overflows it. This pass is O(items) - negligible beside the nested join below -
+because it only measures fields it can read off a single item: NODE comes from
+the pods, NODEPOOL from every Node in the List rather than just the ones that
+turn out to host a pod, which can pad NODEPOOL a little wider than the joined
+rows strictly need. $wNp starts at len "<node-gone>" so that sentinel, which is
+only reachable through the join, never overflows either. */ -}}
+{{- $wPod := 3 }}{{ $wStatus := 6 }}{{ $wNode := 4 }}{{ $wNp := 11 -}}
+{{- range $i := $all -}}
+{{- if eq $i.kind "Pod" -}}
+{{- if gt (len $i.metadata.name) $wPod }}{{ $wPod = len $i.metadata.name }}{{ end -}}
+{{- $s := "-" }}{{ if exists $i.status "phase" }}{{ $s = $i.status.phase }}{{ end -}}
+{{- if gt (len $s) $wStatus }}{{ $wStatus = len $s }}{{ end -}}
+{{- $n := "<unscheduled>" }}{{ if exists $i.spec "nodeName" }}{{ $n = $i.spec.nodeName }}{{ end -}}
+{{- if gt (len $n) $wNode }}{{ $wNode = len $n }}{{ end -}}
+{{- else if eq $i.kind "Node" -}}
+{{- $l := "" -}}
+{{- if exists $i.metadata.labels "karpenter.sh/nodepool" }}{{ $l = index $i.metadata.labels "karpenter.sh/nodepool" }}{{ else if exists $i.metadata.labels "kops.k8s.io/instance-group" }}{{ $l = index $i.metadata.labels "kops.k8s.io/instance-group" }}{{ end -}}
+{{- if gt (len $l) $wNp }}{{ $wNp = len $l }}{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- $fmt := printf "%%-%ds %%-%ds %%-%ds %%-%ds %%s" $wPod $wStatus $wNode $wNp -}}
+{{- printf $fmt "POD" "STATUS" "NODE" "NODEPOOL" "INSTANCE-TYPE" }}
 {{ range $p := $all }}{{ if eq $p.kind "Pod" -}}
+{{- $status := "-" }}{{ if exists $p.status "phase" }}{{ $status = $p.status.phase }}{{ end -}}
 {{- $node := "<unscheduled>" }}{{ if exists $p.spec "nodeName" }}{{ $node = $p.spec.nodeName }}{{ end -}}
 {{- $found := false }}{{ $np := "-" }}{{ $type := "-" -}}
 {{- range $n := $all }}{{ if and (eq $n.kind "Node") (eq $n.metadata.name $node) -}}
@@ -24,5 +48,5 @@ always derivable from the instance-group name, so the real label must win. */ -}
 {{- if exists $n.metadata.labels "node.kubernetes.io/instance-type" }}{{ $type = index $n.metadata.labels "node.kubernetes.io/instance-type" }}{{ end -}}
 {{- end }}{{ end -}}
 {{- if and (not $found) (ne $node "<unscheduled>") }}{{ $np = "<node-gone>" }}{{ end -}}
-{{- printf "%-46s %-10s %-21s %-33s %s" $p.metadata.name $p.status.phase $node $np $type }}
+{{- printf $fmt $p.metadata.name $status $node $np $type }}
 {{ end }}{{ end -}}
