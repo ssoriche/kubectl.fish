@@ -11,6 +11,31 @@ the template formats bumps the minor version until `1.0.0`.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-11
+
+### Added
+
+- `make install-templates` installs the bundled templates to
+  `$KUBECTL_TEMPLATES_DIR`, or `~/.kube/templates/` when that is unset. No
+  plugin manager could do this: fisher and Oh My Fish copy only `functions`,
+  `completions`, `conf.d` and `themes`, so installing kubectl.fish through one
+  produced the entire `^template-name` mechanism with no templates to resolve.
+  Templates you have edited are reported and left in place; `FORCE=1` takes the
+  bundled versions instead.
+- `make diff-templates` shows drift between the bundled templates and the
+  installed ones, in both directions — bundled templates you have modified or
+  not installed, and templates that exist only in your directory.
+- `make install` now installs templates as well, so a `make`-based install is
+  complete in one step.
+
+### Changed
+
+- The manual installation instructions now use `make install` rather than
+  listing `cp` commands that silently omitted the templates.
+- `make uninstall` states that it deliberately leaves `~/.kube/templates/` in
+  place, since that directory holds your own templates alongside the bundled
+  ones.
+
 ## [0.1.0] - 2026-08-11
 
 First tagged release. Contents below describe the collection as it stands, not
@@ -41,5 +66,6 @@ changes relative to an earlier version.
   (finalizers blocking a delete).
 - **`kt`** for switching between per-cluster kubeconfig files.
 
-[Unreleased]: https://github.com/ssoriche/kubectl.fish/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ssoriche/kubectl.fish/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ssoriche/kubectl.fish/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ssoriche/kubectl.fish/releases/tag/v0.1.0
