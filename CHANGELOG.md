@@ -28,9 +28,30 @@ the template formats bumps the minor version until `1.0.0`.
   CodeQL Action v3 additionally carried its own deprecation, scheduled for
   December 2026. `setup-kubectl@v4` is still `node20`, so `v5` is the first major
   that resolves it.
-- `helm/kind-action` now tracks the `v1` major rather than an exact patch,
-  matching every other action pin in the file. The exact pin is how it drifted
-  six minor versions behind.
+### Security
+
+- **All 21 action references are pinned to immutable commit SHAs**, with the
+  version kept in a trailing comment. A mutable tag can be repointed by the
+  action owner, or by whoever compromises that account, with nothing appearing in
+  a diff. This includes `aquasecurity/trivy-action`, which tracked the `master`
+  branch — the scanner could change between runs.
+- Added `.github/dependabot.yml` for the `github-actions` ecosystem. Pinning
+  without automation means never receiving an action's own security fixes;
+  Dependabot bumps the SHA and rewrites the version comment. It does not read
+  `.forgejo/workflows`, so those pins need a manual bump.
+- `zizmor` now audits the workflows in CI via `make audit-workflows`, so the
+  pinning policy is enforced on every run rather than caught in review. Fixing
+  its other findings in the process:
+  - Replaced `${{ github.ref_name }}` interpolations in `release.yaml` with
+    `$GITHUB_REF_NAME`. Interpolated values are substituted into the script
+    before the shell sees them, so a ref containing shell metacharacters would
+    have executed.
+  - Added `persist-credentials: false` to all nine checkouts. None of them push
+    over git, so none needs a credential left in `.git/config`.
+  - Added explicit least-privilege `permissions:` to `test.yaml` and
+    `badge.yaml`; `security-scan` keeps its override for uploading SARIF.
+  - Documented why `badge.yaml`'s `workflow_run` trigger is safe, inline with
+    the suppression, rather than leaving the audit permanently failing.
 
 ## [0.2.0] - 2026-08-11
 

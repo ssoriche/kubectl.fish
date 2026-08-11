@@ -1,7 +1,11 @@
 # kubectl.fish Makefile
 # Provides convenient commands for development, testing, and installation
 
-.PHONY: help install uninstall install-templates diff-templates test test-unit test-integration lint format lint-fix check-formatting clean check-deps check-fish version-check version-check-tag release-notes
+.PHONY: help install uninstall install-templates diff-templates test test-unit test-integration lint format lint-fix check-formatting clean check-deps check-fish version-check version-check-tag release-notes audit-workflows
+
+# Pinned so a zizmor release cannot change CI's verdict without a commit here.
+# Dependabot does not manage this, so bump it by hand.
+ZIZMOR_VERSION ?= 1.29.0
 
 # Default target
 help: ## Show this help message
@@ -265,6 +269,19 @@ release-check: lint test version-check ## Run all checks before release
 # Note: failures below use { ...; exit 1; } rather than ( ...; exit 1 ). A
 # subshell's exit only ends the subshell, so with more commands on the same
 # recipe line the check would report the error and then carry on to succeed.
+audit-workflows: ## Audit GitHub workflows with zizmor (needs uv or pipx)
+	@if command -v uvx >/dev/null 2>&1; then \
+		runner="uvx"; \
+	elif command -v pipx >/dev/null 2>&1; then \
+		runner="pipx run"; \
+	else \
+		echo "❌ zizmor needs either uv or pipx installed"; \
+		echo "   brew install uv   # or: brew install pipx"; \
+		exit 1; \
+	fi; \
+	echo "Auditing .github/workflows with zizmor $(ZIZMOR_VERSION)..."; \
+	$$runner zizmor==$(ZIZMOR_VERSION) .github/workflows/
+
 version-check: ## Verify VERSION is semver and matches the newest CHANGELOG entry
 	@test -f VERSION || { echo "❌ VERSION file is missing"; exit 1; }
 	@test -f CHANGELOG.md || { echo "❌ CHANGELOG.md is missing"; exit 1; }
