@@ -101,6 +101,31 @@ kubectl's template engine is Go's `text/template` plus two extra functions,
 Guard every field access that may be absent with `exists`, and prefer `printf`
 for column alignment so the output needs no `column -t`.
 
+#### Column Widths
+
+A hardcoded width (`printf "%-46s ..."`) misaligns every row whose value
+overflows it, and generated names — Spark executors, Argo workflow steps — blow
+past any width you would want to reserve. Measure the data instead: `len`, `gt`
+and `printf` are all available, so a first `range` can find the widest value per
+column and build the format string once for both the header and the rows.
+
+```
+{{- $w := 3 -}}
+{{- range $i := .items }}{{ if gt (len $i.metadata.name) $w }}{{ $w = len $i.metadata.name }}{{ end }}{{ end -}}
+{{- $fmt := printf "%%-%ds %%s" $w -}}
+{{- printf $fmt "NAME" "STATUS" }}
+```
+
+Note the doubled `%%` — the outer `printf` emits the format string the inner one
+consumes.
+
+Keep that pass O(items). Measuring a column that only a nested-`range` join can
+resolve means running the join twice, and the join is the expensive part:
+`pods-nodepools.tmpl` takes ~4s on a 2200-pod namespace. That template therefore
+measures NODEPOOL from every `Node` in the `List`, which pads a little wider than
+the joined rows need, and seeds the width from its longest sentinel
+(`<node-gone>`) so values only reachable through the join still fit.
+
 ## Creating Your Own Templates
 
 1. Create a new `.tmpl` or `.template` file in one of the template directories
@@ -129,8 +154,9 @@ contain that sequence.
 - **Arrays**: Use `[*]` for all elements or `[0]` for first element
 - **Nested paths**: Chain with dots (e.g., `.status.conditions[*].type`)
 - **Test with kubectl**: Verify with `kubectl get ... -o json` first
-- **Go templates**: Guard optional fields with `exists`, align with `printf`, and
-  see `pods-nodepools.tmpl` for a worked cross-resource example
+- **Go templates**: Guard optional fields with `exists`, align with `printf` over
+  measured widths (see [Column Widths](#column-widths)), and see
+  `pods-nodepools.tmpl` for a worked cross-resource example
 
 ### Example: Creating a Custom Node Template
 
