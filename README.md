@@ -38,13 +38,10 @@ git clone https://github.com/ssoriche/kubectl.fish.git
 cd kubectl.fish
 ```
 
-2. Copy functions, completions, and conf.d snippets:
+2. Install functions, completions, conf.d snippets, and templates:
 
 ```bash
-mkdir -p ~/.config/fish/functions ~/.config/fish/completions ~/.config/fish/conf.d
-cp functions/*.fish ~/.config/fish/functions/
-cp completions/*.fish ~/.config/fish/completions/
-cp conf.d/*.fish ~/.config/fish/conf.d/
+make install
 ```
 
 The `conf.d/k_abbr.fish` snippet registers `k` as a fish abbreviation expanding to `kubectl`; without it the `k` shortcut won't work.
@@ -66,6 +63,33 @@ fisher install ssoriche/kubectl.fish
 ```bash
 omf install https://github.com/ssoriche/kubectl.fish
 ```
+
+### Installing the templates
+
+**Plugin managers do not install the templates.** Fisher and Oh My Fish copy
+only `functions`, `completions`, `conf.d`, and `themes` — the bundled templates
+live in `templates/` and are read from `~/.kube/templates/` at runtime, which is
+outside any of those. Installing via Method 2 or 3 therefore gives you the whole
+`^template-name` mechanism with no templates to point it at.
+
+To install them, from a clone of this repository:
+
+```bash
+make install-templates
+```
+
+That writes to `$KUBECTL_TEMPLATES_DIR` if set, otherwise `~/.kube/templates/`.
+It never clobbers a template you have edited: files that differ from the bundled
+version are left alone and reported. To see what differs, or to take the
+bundled versions anyway:
+
+```bash
+make diff-templates              # show drift, including your own templates
+make install-templates FORCE=1   # replace edited templates with the bundled ones
+```
+
+Your own templates in that directory are never touched by either command, and
+`make uninstall` leaves the directory in place for the same reason.
 
 ## 🔧 Functions
 

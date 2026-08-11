@@ -32,6 +32,21 @@ The template system uses kubectl's native custom-columns functionality, so templ
 set -gx KUBECTL_TEMPLATES_DIR ~/my-custom-templates
 ```
 
+### Installing the bundled templates
+
+Because that directory sits outside the fish config tree, no plugin manager
+installs these files — fisher and Oh My Fish copy only `functions`,
+`completions`, `conf.d`, and `themes`. If you installed kubectl.fish through a
+plugin manager, run this from a clone of the repository to get the templates:
+
+```fish
+make install-templates
+```
+
+Templates you have edited are left alone rather than overwritten. `make
+diff-templates` shows what differs (including templates only you have), and
+`make install-templates FORCE=1` takes the bundled versions anyway.
+
 ## Template Format
 
 A template file is one of three formats, detected by its content:
