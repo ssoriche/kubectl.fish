@@ -1,0 +1,21 @@
+version: 2
+
+updates:
+  # Action references are pinned to commit SHAs, which never move on their own —
+  # a pin with nothing bumping it means never receiving that action's own
+  # security fixes. Dependabot updates the SHA and rewrites the trailing
+  # "# vX.Y.Z" comment to match, so the pin stays both immutable and current.
+  #
+  # Scope note: this only covers .github/workflows. Dependabot does not read
+  # .forgejo/workflows, so the checkout pins there need a manual bump. They are
+  # all the same action at the same SHA, so one edit covers all seven.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns:
+          - "*"

@@ -14,9 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          # The release is published with GH_TOKEN via the gh CLI, not by
+          # pushing over git, so the checkout has no need to leave a credential
+          # behind in .git/config.
+          persist-credentials: false
 
       - name: Install Fish shell
         run: |
@@ -28,8 +32,13 @@ jobs:
 
       # The tag is the trigger, so this is the last chance to catch a tag that
       # disagrees with VERSION, or a VERSION with no matching CHANGELOG entry.
+      #
+      # $GITHUB_REF_NAME rather than a ${{ }} interpolation: interpolated values
+      # are substituted into the script before the shell sees them, so a ref
+      # containing shell metacharacters would execute. The env var is passed to
+      # the shell as data.
       - name: Verify tag matches VERSION and CHANGELOG
-        run: make version-check-tag TAG=${{ github.ref_name }}
+        run: make version-check-tag "TAG=$GITHUB_REF_NAME"
 
       - name: Run full test suite
         run: make release-check
@@ -49,7 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
             --notes-file release-notes.md \
             --verify-tag

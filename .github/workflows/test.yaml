@@ -6,18 +6,31 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+# Least privilege by default. The only job needing more is security-scan, which
+# overrides this to upload its SARIF results.
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint and Format Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Fish shell
         run: |
           sudo apt-get update
           sudo apt-get install -y fish
+
+      # Enforces the SHA-pinning policy in CI rather than only in code review,
+      # along with zizmor's other workflow audits. Runs the same make target
+      # contributors run locally.
+      - name: Audit workflows with zizmor
+        run: make audit-workflows
 
       - name: Install fishcheck (optional linter)
         run: |
@@ -71,7 +84,9 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Fish shell
         run: |
@@ -113,7 +128,9 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Fish shell
         run: |
@@ -121,7 +138,7 @@ jobs:
           sudo apt-get install -y fish
 
       - name: Install kubectl
-        uses: azure/setup-kubectl@v5
+        uses: azure/setup-kubectl@829323503d1be3d00ca8346e5391ca0b07a9ab0d # v5
         with:
           version: 'v1.28.0'
 
@@ -133,7 +150,7 @@ jobs:
           sudo mv gron /usr/local/bin/
 
       - name: Create kind cluster
-        uses: helm/kind-action@v1
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           cluster_name: kubectl-fish-test
           wait: 300s
@@ -158,7 +175,9 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Fish shell (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -210,10 +229,12 @@ jobs:
       actions: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -221,7 +242,7 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -231,7 +252,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Fish shell
         run: |
@@ -267,7 +290,7 @@ jobs:
           make docs
 
       - name: Check for broken links in README
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        uses: gaurav-nelson/github-action-markdown-link-check@5c5dfc0ac2e225883c0e5f03a85311ec2830d368 # v1
         with:
           use-quiet-mode: 'yes'
           use-verbose-mode: 'yes'
@@ -283,7 +306,9 @@ jobs:
     needs: [test-unit, test-integration, test-cross-platform, security-scan, documentation]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install Fish shell
         run: |

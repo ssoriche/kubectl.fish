@@ -3,10 +3,18 @@ name: Generate CI Badges
 on:
   push:
     branches: [ main ]
+  # zizmor: ignore[dangerous-triggers]
+  # workflow_run runs with the base repository's token and secrets, which is
+  # dangerous only when combined with checking out the triggering pull request's
+  # code. The checkout below passes no ref, so it takes the default branch and
+  # never executes fork-contributed code, and the job holds only contents: read.
   workflow_run:
     workflows: ["Test kubectl.fish Functions"]
     types:
       - completed
+
+permissions:
+  contents: read
 
 jobs:
   badge:
@@ -14,7 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Generate badge
         run: |
