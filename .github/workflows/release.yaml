@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Fish shell
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fish
+
+      - name: Install dependencies
+        run: make install-deps-ubuntu
+
+      # The tag is the trigger, so this is the last chance to catch a tag that
+      # disagrees with VERSION, or a VERSION with no matching CHANGELOG entry.
+      - name: Verify tag matches VERSION and CHANGELOG
+        run: make version-check-tag TAG=${{ github.ref_name }}
+
+      - name: Run full test suite
+        run: make release-check
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          make release-notes > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "❌ No CHANGELOG section found for this version"
+            exit 1
+          fi
+          echo "Release notes:"
+          cat release-notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file release-notes.md \
+            --verify-tag
