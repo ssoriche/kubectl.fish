@@ -1,0 +1,11 @@
+{
+  "ignorePatterns": [
+    {
+      "comment": "CHANGELOG.md links a new version to its tag and compare view, but the tag is only pushed after the release PR merges. These 404 during CI on every release and resolve the moment the tag exists.",
+      "pattern": "^https://github\\.com/ssoriche/kubectl\\.fish/(compare|releases)/"
+    }
+  ],
+  "timeout": "20s",
+  "retryOn429": true,
+  "aliveStatusCodes": [200, 206]
+}

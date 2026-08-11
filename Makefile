@@ -1,7 +1,7 @@
 # kubectl.fish Makefile
 # Provides convenient commands for development, testing, and installation
 
-.PHONY: help install uninstall test test-unit test-integration lint format lint-fix check-formatting clean check-deps check-fish
+.PHONY: help install uninstall test test-unit test-integration lint format lint-fix check-formatting clean check-deps check-fish version-check version-check-tag release-notes
 
 # Default target
 help: ## Show this help message
@@ -205,8 +205,39 @@ check-kubectl:
 	@command -v kubectl >/dev/null 2>&1 || (echo "❌ kubectl is required but not installed" && exit 1)
 
 # Release helpers
-release-check: lint test ## Run all checks before release
+release-check: lint test version-check ## Run all checks before release
 	@echo "🚀 All checks passed! Ready for release."
+
+# Note: failures below use { ...; exit 1; } rather than ( ...; exit 1 ). A
+# subshell's exit only ends the subshell, so with more commands on the same
+# recipe line the check would report the error and then carry on to succeed.
+version-check: ## Verify VERSION is semver and matches the newest CHANGELOG entry
+	@test -f VERSION || { echo "❌ VERSION file is missing"; exit 1; }
+	@test -f CHANGELOG.md || { echo "❌ CHANGELOG.md is missing"; exit 1; }
+	@v=`tr -d '[:space:]' < VERSION`; \
+	echo "$$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$$' \
+		|| { echo "❌ VERSION '$$v' is not MAJOR.MINOR.PATCH"; exit 1; }; \
+	c=`grep -Eo '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md | head -1 | tr -d '#[] '`; \
+	test -n "$$c" || { echo "❌ CHANGELOG.md has no released version heading"; exit 1; }; \
+	test "$$v" = "$$c" \
+		|| { echo "❌ VERSION ($$v) does not match newest CHANGELOG entry ($$c)"; exit 1; }; \
+	echo "✅ VERSION $$v matches CHANGELOG"
+
+version-check-tag: version-check ## Verify a tag matches VERSION (make version-check-tag TAG=v0.1.0)
+	@test -n "$(TAG)" || { echo "❌ TAG is required, e.g. make version-check-tag TAG=v0.1.0"; exit 1; }
+	@v=`tr -d '[:space:]' < VERSION`; \
+	test "$(TAG)" = "v$$v" \
+		|| { echo "❌ tag $(TAG) does not match VERSION $$v (expected v$$v)"; exit 1; }; \
+	echo "✅ tag $(TAG) matches VERSION"
+
+release-notes: ## Print the CHANGELOG section for the current VERSION
+	@v=`tr -d '[:space:]' < VERSION`; \
+	awk -v ver="$$v" ' \
+		index($$0, "## [" ver "]") == 1 { inside = 1; next } \
+		inside && index($$0, "## [") == 1 { exit } \
+		inside && $$0 ~ /^\[[^]]+\]:/ { exit } \
+		inside { print } \
+	' CHANGELOG.md | awk 'NF { started = 1 } started { print }'
 
 install-deps-macos: ## Install optional dependencies on macOS using Homebrew
 	@echo "Installing optional dependencies on macOS..."
