@@ -11,6 +11,18 @@ the template formats bumps the minor version until `1.0.0`.
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `actions/checkout` from `@v4` to `@v7` across all 16 usages, in both
+  the GitHub and Forgejo workflows. This clears the Node 20 deprecation warning
+  every run was annotating with — `v4` is `using: node20`, `v5` onward is
+  `node24`.
+- `v7` rather than `v5` specifically so both workflow sets can share a version.
+  Forgejo resolves actions from its own mirror, which forks checkout on a
+  separate lineage; `v5` and `v6` exist only upstream, while `v7` exists in both.
+  Pinning `v5` would have meant leaving Forgejo on `node20` indefinitely with a
+  permanent, unexplainable version skew between the two files.
+
 ## [0.2.0] - 2026-08-11
 
 ### Added

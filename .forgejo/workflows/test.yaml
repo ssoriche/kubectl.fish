@@ -1,5 +1,10 @@
 name: Test kubectl.fish Functions
 
+# actions/checkout is pinned to the same major here as in the GitHub workflows.
+# Keep them in step: Forgejo resolves actions from its own mirror, which forks
+# checkout on a separate lineage, so not every upstream major exists there. As
+# of v7 both lineages have the tag; v5 and v6 exist only upstream.
+
 on:
   push:
     branches: [main, develop]
@@ -12,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Fish shell
         run: |
@@ -35,7 +40,7 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Fish shell and dependencies
         run: |
@@ -75,7 +80,7 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Fish shell and dependencies
         run: |
@@ -125,7 +130,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Fish shell
         run: |
@@ -166,7 +171,7 @@ jobs:
     needs: lint
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Fish shell and basic dependencies
         run: |
@@ -209,7 +214,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check for secrets in code
         run: |
@@ -240,7 +245,7 @@ jobs:
       ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Fish shell
         run: |
