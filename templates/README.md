@@ -109,7 +109,7 @@ past any width you would want to reserve. Measure the data instead: `len`, `gt`
 and `printf` are all available, so a first `range` can find the widest value per
 column and build the format string once for both the header and the rows.
 
-```
+```gotemplate
 {{- $w := 3 -}}
 {{- range $i := .items }}{{ if gt (len $i.metadata.name) $w }}{{ $w = len $i.metadata.name }}{{ end }}{{ end -}}
 {{- $fmt := printf "%%-%ds %%s" $w -}}
