@@ -258,6 +258,43 @@ test: add integration tests for kubectl-gron
 - Follow-up reviews within 24 hours
 - Approval and merge after all checks pass
 
+## 🚀 Releasing
+
+Releases are cut from `main` by pushing a tag. Publishing is automated by
+`.github/workflows/release.yaml`; everything before the tag is a normal PR.
+
+Two files track the version and must agree, which `make version-check` enforces
+on every PR into `main`:
+
+- `VERSION` — the bare version, no `v` prefix (e.g. `0.1.0`)
+- `CHANGELOG.md` — the newest `## [x.y.z]` heading must match `VERSION`
+
+To cut a release:
+
+1. Move the accumulated `## [Unreleased]` notes under a new
+   `## [x.y.z] - YYYY-MM-DD` heading, and add the matching link reference at the
+   bottom of the file.
+2. Update `VERSION` to the same number.
+3. Run `make release-check` (lint, tests, version consistency) and
+   `make release-notes` to preview exactly what the release body will say.
+4. Open a PR, get it green, and merge it.
+5. Tag the merge commit on `main` and push the tag:
+
+   ```fish
+   git switch main
+   git pull
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+The workflow then re-verifies the tag against `VERSION`, re-runs the full suite,
+extracts that version's `CHANGELOG.md` section, and publishes it as the GitHub
+release body. A tag that disagrees with `VERSION` fails rather than publishing
+something mislabelled.
+
+While the project is on `0.y.z`, a breaking change to a function signature, the
+`^template` syntax, or the template formats bumps the minor version.
+
 ## 🎁 Recognition
 
 Contributors will be:
