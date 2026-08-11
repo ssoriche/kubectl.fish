@@ -22,6 +22,15 @@ the template formats bumps the minor version until `1.0.0`.
   separate lineage; `v5` and `v6` exist only upstream, while `v7` exists in both.
   Pinning `v5` would have meant leaving Forgejo on `node20` indefinitely with a
   permanent, unexplainable version skew between the two files.
+- Bumped the remaining Node 20 actions so no workflow is annotated for a
+  deprecated runtime: `github/codeql-action/upload-sarif` `@v3` → `@v4`,
+  `azure/setup-kubectl` `@v3` → `@v5`, and `helm/kind-action` `@v1.8.0` → `@v1`.
+  CodeQL Action v3 additionally carried its own deprecation, scheduled for
+  December 2026. `setup-kubectl@v4` is still `node20`, so `v5` is the first major
+  that resolves it.
+- `helm/kind-action` now tracks the `v1` major rather than an exact patch,
+  matching every other action pin in the file. The exact pin is how it drifted
+  six minor versions behind.
 
 ## [0.2.0] - 2026-08-11
 
