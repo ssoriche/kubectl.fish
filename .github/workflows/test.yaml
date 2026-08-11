@@ -271,6 +271,10 @@ jobs:
         with:
           use-quiet-mode: 'yes'
           use-verbose-mode: 'yes'
+          # Excludes this repo's own tag/compare URLs, which CHANGELOG.md
+          # references for a version whose tag is not pushed until after the
+          # release PR merges.
+          config-file: '.github/mlc_config.json'
 
   release-check:
     name: Release Readiness
@@ -289,13 +293,13 @@ jobs:
       - name: Install dependencies
         run: make install-deps-ubuntu
 
+      # Ahead of the full suite so a version/CHANGELOG mismatch fails in seconds
+      # with an obvious step name. release-check re-runs this as a dependency.
+      - name: Check version consistency
+        run: make version-check
+
       - name: Run full test suite
         run: make release-check
-
-      - name: Check version consistency
-        run: |
-          # Add version checking logic here if you have version files
-          echo "✅ Release readiness check completed"
 
   ci:
     name: ci/github-actions
