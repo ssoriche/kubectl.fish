@@ -11,6 +11,27 @@ the template formats bumps the minor version until `1.0.0`.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-12
+
+### Fixed
+
+- `pods-nodepools.tmpl` measures its column widths from the data instead of
+  hardcoding them. POD was given 46 characters, so every row with a longer name
+  pushed the remaining four columns right — and generated names reach ~80
+  characters, which meant the table lost its alignment in exactly the namespaces
+  busy enough to need it.
+- The measuring pass is deliberately `O(items)` rather than a second join. The
+  nested-`range` join is the expensive part — ~4s on a 2200-pod namespace — so
+  measuring by re-running it would double every render. NODEPOOL is therefore
+  measured across every `Node` in the `List` rather than only the ones that turn
+  out to host a pod, which can pad it slightly wider than the joined rows need,
+  and its width is seeded from `len "<node-gone>"` so that join-only sentinel
+  still fits.
+- STATUS falls back to `-` when `.status.phase` is absent, which keeps `len` from
+  erroring on a nil and stops `<no value>` from overflowing the column.
+- `templates/README.md` documents the technique under **Column Widths**, since
+  every Go template that aligns output has the same problem.
+
 ### Changed
 
 - Bumped `actions/checkout` from `@v4` to `@v7` across all 16 usages, in both
@@ -28,6 +49,7 @@ the template formats bumps the minor version until `1.0.0`.
   CodeQL Action v3 additionally carried its own deprecation, scheduled for
   December 2026. `setup-kubectl@v4` is still `node20`, so `v5` is the first major
   that resolves it.
+
 ### Security
 
 - **All 21 action references are pinned to immutable commit SHAs**, with the
@@ -108,6 +130,7 @@ changes relative to an earlier version.
   (finalizers blocking a delete).
 - **`kt`** for switching between per-cluster kubeconfig files.
 
-[Unreleased]: https://github.com/ssoriche/kubectl.fish/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ssoriche/kubectl.fish/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/ssoriche/kubectl.fish/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ssoriche/kubectl.fish/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ssoriche/kubectl.fish/releases/tag/v0.1.0
